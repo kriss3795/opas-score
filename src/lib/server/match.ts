@@ -276,7 +276,11 @@ export async function matchDetail(league: string, id: string) {
   let table = null;
   if (!meta.cup && meta.kind !== "event") {
     const st = await teamStandings(league);
-    if (st?.rows.length) table = st.rows;
+    if (st?.rows.length) {
+      // Liga con varias zonas: solo la del local (si ambos están en ella).
+      const g = st.rows.find((r) => r.teamId === String(home?.id ?? ""))?.group;
+      table = g ? st.rows.filter((r) => r.group === g) : st.rows;
+    }
   }
 
   // --- Información ---

@@ -63,8 +63,11 @@ export async function teamScoreboard(league: string, from: Date, to: Date): Prom
   if (!meta) return null;
   const path = meta.path;
   const today = ymd(new Date());
+  // Un día por fecha UTC entre `from` y `to`, más el día anterior: ESPN agrupa por fecha de EE. UU.
+  // (un partido a las 02:00 UTC aparece en la fecha del día anterior).
   const days: Date[] = [];
-  for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86400000)) days.push(d);
+  const first = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()) - 86400000;
+  for (let t = first; t <= to.getTime(); t += 86400000) days.push(new Date(t));
   const results = await Promise.all(
     days.map((d) => {
       const key = ymd(d);
@@ -164,7 +167,13 @@ export async function teamStandings(league: string): Promise<Standings | null> {
   const collect = (node: any): any[] =>
     node?.standings?.entries?.length ? node.standings.entries : (node?.children ?? []).flatMap((c: any) => collect(c));
   const groups: any[] = data.children?.length ? data.children : [data];
-  const entries: any[] = usSport ? collect(data) : groups[0]?.standings?.entries ?? [];
+  // Ligas con varias zonas (MLS, conferencias): cada fila guarda su grupo y se ordena dentro de él.
+  const multi = !usSport && groups.filter((g) => g?.standings?.entries?.length).length > 1;
+  const entries: any[] = usSport
+    ? collect(data)
+    : multi
+      ? groups.flatMap((g) => (g?.standings?.entries ?? []).map((e: any) => ({ ...e, __group: g.name ?? g.abbreviation })))
+      : groups[0]?.standings?.entries ?? [];
   if (!entries.length) return null;
   const isNBA = usSport && meta.sport !== "hockey";
   const stat = (e: any, n: string) => {
@@ -185,6 +194,7 @@ export async function teamStandings(league: string): Promise<Standings | null> {
     ga: stat(e, "pointsAgainst"),
     points: isNBA ? stat(e, "wins") ?? 0 : stat(e, "points") ?? 0,
     note: !usSport && e.note ? { color: e.note.color, description: e.note.description } : undefined,
+    group: e.__group,
   }));
   if (meta.sport === "hockey") rows.sort((a, b) => b.points - a.points || (b.won ?? 0) - (a.won ?? 0)).forEach((r, i) => (r.rank = i + 1));
   else if (isNBA) rows.sort((a, b) => b.points - a.points || (a.lost ?? 0) - (b.lost ?? 0)).forEach((r, i) => (r.rank = i + 1));
@@ -194,6 +204,11 @@ export async function teamStandings(league: string): Promise<Standings | null> {
       .sort((a, b) => b.points - a.points || (b.won ?? 0) - (a.won ?? 0) || (b.diff ?? 0) - (a.diff ?? 0) || (b.gf ?? 0) - (a.gf ?? 0))
       .forEach((r, i) => (r.rank = i + 1));
   else rows.sort((a, b) => a.rank - b.rank);
+  // Con varias zonas: primero el grupo (en el orden de la fuente), luego la posición.
+  if (multi) {
+    const order = groups.map((g) => g.name ?? g.abbreviation);
+    rows.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || a.rank - b.rank);
+  }
   return {
     competitionId: league,
     competitionName: meta.name.fr,

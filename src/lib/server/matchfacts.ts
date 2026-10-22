@@ -107,11 +107,13 @@ export async function matchFacts(m: Detail, followed: string[]): Promise<Fact[]>
         for (const t of teams) {
           const r = row(t.id);
           if (!r) continue;
-          const newPos = rows.filter((x) => x.teamId !== t.id && x.points > r.points + 3).length + 1;
+          // Peor caso: los empatados en puntos cuentan por delante (no se conoce el desempate).
+          const newPos = rows.filter((x) => x.teamId !== t.id && x.points >= r.points + 3).length + 1;
+          const o = (n: number) => (n === 1 ? "1re" : `${n}e`);
           if (r.rank - newPos >= 2)
             facts.push({
-              fr: `En cas de victoire, ${t.name} grimperait provisoirement de la ${r.rank}e à la ${newPos}e place.`,
-              es: `Si gana, ${t.name} subiría provisoriamente del ${r.rank}.º al ${newPos}.º lugar.`,
+              fr: `En cas de victoire, ${t.name} grimperait provisoirement de la ${o(r.rank)} place à au moins la ${o(newPos)}.`,
+              es: `Si gana, ${t.name} subiría provisoriamente del ${r.rank}.º lugar al ${newPos}.º o mejor.`,
               source: "ESPN",
               url,
               type: `table-${t.id}`,

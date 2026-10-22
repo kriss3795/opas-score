@@ -100,7 +100,9 @@ export function tennisAlerts(prev: LiveState | null, cur: LiveState, e: any, lan
   }
   if (prev && prev.s !== "post" && cur.s === "post") {
     const w = e.home.winner ? A : e.away.winner ? B : "";
-    out.push({ title: fr ? `🏆 ${w} gagne !` : `🏆 ¡Gana ${w}!`, body: `${A} ${score} ${B}`, url, tag, kind: "final" });
+    // Sin ganador marcado (abandono, dato pendiente): se avisa el fin sin inventar quién ganó.
+    const title = w ? (fr ? `🏆 ${w} gagne !` : `🏆 ¡Gana ${w}!`) : fr ? "🎾 Fin du match" : "🎾 Fin del partido";
+    out.push({ title, body: `${A} ${score} ${B}`, url, tag, kind: "final" });
   }
   return out;
 }
@@ -162,9 +164,11 @@ export function liveAlerts(prev: LiveState | null, cur: LiveState, e: any, keyEv
   // Cambios de marcador que no merecen aviso: punto extra (NFL) y conversión (rugby).
   const minDelta = e.sport === "nfl" ? 2 : e.sport === "rugby" ? 3 : 1;
 
+  // "Pitazo" solo en deportes con árbitro de silbato (fútbol, rugby); en el resto, "empieza/termina".
+  const whistle = e.sport === "football" || e.sport === "rugby";
   const startedAgo = Date.now() - new Date(e.start).getTime();
   if ((!prev || prev.s === "pre") && cur.s === "in" && startedAgo < 20 * 60000) {
-    out.push({ title: fr ? "🟢 Coup d'envoi !" : "🟢 ¡Pitazo inicial!", body: `${h} – ${a}`, url, tag: nextTag(), kind: "start" });
+    out.push({ title: whistle ? (fr ? "🟢 Coup d'envoi !" : "🟢 ¡Pitazo inicial!") : fr ? "🟢 Début du match" : "🟢 Empieza el partido", body: `${h} – ${a}`, url, tag: nextTag(), kind: "start" });
   }
 
   // Incidencias nuevas desde el último aviso (la primera vez solo se registran, no se avisan en bloque).
@@ -212,8 +216,8 @@ export function liveAlerts(prev: LiveState | null, cur: LiveState, e: any, keyEv
   }
   if (prev && prev.s !== "post" && cur.s === "post") {
     const pens = e.home?.pen !== undefined && e.away?.pen !== undefined ? ` · ${fr ? "t.a.b." : "penales"} ${e.home.pen}-${e.away.pen}` : "";
-    const aet = !pens && e.statusDetail === "AET" ? ` (${fr ? "a.p." : "alargue"})` : "";
-    out.push({ title: fr ? "🏁 Coup de sifflet final" : "🏁 Pitazo final", body: `${score}${aet}${pens}`, url, tag: nextTag(), kind: "final" });
+    const aet = !pens && e.statusDetail === "AET" ? ` (${fr ? (e.sport === "football" ? "a.p." : "prol.") : "prórroga"})` : "";
+    out.push({ title: whistle ? (fr ? "🏁 Coup de sifflet final" : "🏁 Pitazo final") : fr ? "🏁 Fin du match" : "🏁 Final del partido", body: `${score}${aet}${pens}`, url, tag: nextTag(), kind: "final" });
   }
   return out;
 }
@@ -252,7 +256,7 @@ export function f1Alerts(prevState: any, sessionKey: string, start: string, race
       title: isRace
         ? fr
           ? `🏆 ${winner} remporte ${sessionKey === "race" ? "la course" : "le sprint"} !`
-          : `🏆 ¡${winner} gana la ${sessionKey === "race" ? "carrera" : "sprint"}!`
+          : `🏆 ¡${winner} gana ${sessionKey === "race" ? "la carrera" : "el sprint"}!`
         : fr
           ? `⏱️ Pole position pour ${winner}`
           : `⏱️ Pole position para ${winner}`,

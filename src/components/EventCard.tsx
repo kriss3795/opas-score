@@ -51,10 +51,15 @@ export function StatusBadge({ e }: { e: SportEvent }) {
       <span className="text-right text-sm leading-tight font-semibold text-muted">
         {t("final")}
         {e.statusDetail === "PEN" && <span className="block text-[11px]">{lang === "fr" ? "t.a.b." : "penales"}</span>}
-        {e.statusDetail === "AET" && <span className="block text-[11px]">{lang === "fr" ? "a.p." : "alargue"}</span>}
+        {e.statusDetail === "AET" && <span className="block text-[11px]">{lang === "fr" ? (e.sport === "football" ? "a.p." : "prol.") : "prórroga"}</span>}
       </span>
     );
-  if (e.status === "cancelled") return <span className="text-sm font-semibold text-muted">{t("postponed")}</span>;
+  if (e.status === "cancelled")
+    return (
+      <span className="text-sm font-semibold text-muted">
+        {e.statusDetail === "cancelled" ? (lang === "fr" ? "Annulé" : "Cancelado") : t("postponed")}
+      </span>
+    );
   // Fuera de hoy, siempre se muestra el día junto a la hora (evita confundir el sábado con hoy).
   const d = new Date(e.start);
   const today = new Date();

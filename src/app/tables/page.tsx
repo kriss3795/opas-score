@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/client/store";
 import { LEAGUES, leagueMeta, sportMeta } from "@/lib/catalog";
 import type { Standings, StandingRow } from "@/lib/types";
@@ -103,11 +103,13 @@ export default function TablesPage() {
                 <span className="w-9 text-center">{byWins ? (lang === "fr" ? "D" : "P") : t("diff")}</span>
                 <span className="w-9 text-center">{byWins ? (lang === "fr" ? "V" : "G") : t("points")}</span>
               </div>
-              {data.rows.map((r) => {
+              {data.rows.map((r, i) => {
                 const isFav = (r.teamId && fav.has(`${sport}:${r.teamId}`)) || favNames.has(r.name);
+                const newGroup = r.group && r.group !== data.rows[i - 1]?.group;
                 return (
+                  <Fragment key={`${r.group ?? ""}-${r.rank}-${r.name}`}>
+                  {newGroup && <div className="bg-card2 px-3 py-1.5 text-xs font-bold text-muted uppercase">{r.group}</div>}
                   <div
-                    key={`${r.rank}-${r.name}`}
                     className={`flex items-center gap-2 border-b border-line px-3 py-2.5 last:border-0 ${isFav ? "bg-brand/10" : ""}`}
                     style={{ boxShadow: r.note?.color ? `inset 3px 0 0 #${r.note.color.replace("#", "")}` : undefined }}
                   >
@@ -120,6 +122,7 @@ export default function TablesPage() {
                     </span>
                     <span className="font-score w-9 text-center text-xl font-extrabold">{r.points}</span>
                   </div>
+                  </Fragment>
                 );
               })}
             </div>
@@ -150,7 +153,7 @@ const MATH_LEAGUES = new Set(["fra.1", "fra.2", "eng.1", "eng.2", "esp.1", "ita.
 
 function LeagueMath({ data }: { data: Standings }) {
   const { lang } = useApp();
-  if (!MATH_LEAGUES.has(data.competitionId)) return null;
+  if (!MATH_LEAGUES.has(data.competitionId) || data.rows.some((r) => r.group)) return null;
   const rows = data.rows;
   const n = rows.length;
   const G = 2 * (n - 1);

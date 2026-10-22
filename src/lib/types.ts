@@ -58,6 +58,7 @@ export interface StandingRow {
   ga?: number; // en contra
   points: number;
   note?: { color?: string; description?: string };
+  group?: string; // conferencia o grupo (MLS, ligas con varias zonas)
 }
 
 export interface Standings {
