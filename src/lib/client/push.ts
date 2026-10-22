@@ -43,11 +43,24 @@ function urlB64ToUint8Array(base64: string) {
 
 export async function currentSubscription(): Promise<PushSubscription | null> {
   if (!pushSupported()) return null;
-  const reg = await navigator.serviceWorker.getRegistration();
-  return (await reg?.pushManager.getSubscription()) ?? null;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    return (await reg?.pushManager.getSubscription()) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function enablePush(lang: string, query = ""): Promise<"ok" | "denied" | "unsupported" | "error"> {
+  // Cualquier fallo del navegador (sin red, iPhone sin instalar la app…) se informa en vez de quedar colgado.
+  try {
+    return await enablePushInner(lang, query);
+  } catch {
+    return "error";
+  }
+}
+
+async function enablePushInner(lang: string, query: string): Promise<"ok" | "denied" | "unsupported" | "error"> {
   if (!pushSupported()) return "unsupported";
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return "denied";
@@ -83,8 +96,8 @@ export async function setReminder(opts: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint: sub.endpoint, ...opts }),
-  });
-  return res.ok;
+  }).catch(() => null);
+  return Boolean(res?.ok);
 }
 
 export async function sendTest(): Promise<boolean> {
@@ -94,8 +107,8 @@ export async function sendTest(): Promise<boolean> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint: sub.endpoint }),
-  });
-  return res.ok;
+  }).catch(() => null);
+  return Boolean(res?.ok);
 }
 
 // Envía las preferencias al servidor para el resumen matinal (solo si las notificaciones están activas).
@@ -149,6 +162,6 @@ export async function delayedTest(): Promise<boolean> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint: sub.endpoint, delayed: true }),
-  });
-  return r.ok;
+  }).catch(() => null);
+  return Boolean(r?.ok);
 }

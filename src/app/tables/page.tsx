@@ -177,7 +177,7 @@ function LeagueMath({ data }: { data: Standings }) {
         <p className="mt-2 text-lg font-extrabold text-gold">🏆 {leader.name}</p>
       ) : (
         <ul className="mt-2 space-y-1.5">
-          {contenders.map((r) => (
+          {contenders.slice(0, 6).map((r) => (
             <li key={r.name} className="flex items-center gap-2 text-sm">
               <TeamLogo src={r.logo} name={r.name} size={18} />
               <span className="flex-1 leading-tight font-semibold">{r.name}</span>
@@ -186,6 +186,11 @@ function LeagueMath({ data }: { data: Standings }) {
               </span>
             </li>
           ))}
+          {contenders.length > 6 && (
+            <li className="text-sm text-muted">
+              {fr ? `+ ${contenders.length - 6} autres équipes` : `+ ${contenders.length - 6} equipos más`}
+            </li>
+          )}
         </ul>
       )}
       {safePlaces > 0 && (

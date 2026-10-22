@@ -30,8 +30,12 @@ export default function InstallPage() {
       setBip(e as BIPEvent);
     };
     window.addEventListener("beforeinstallprompt", h);
-    window.addEventListener("appinstalled", () => setInstalled(true));
-    return () => window.removeEventListener("beforeinstallprompt", h);
+    const done = () => setInstalled(true);
+    window.addEventListener("appinstalled", done);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", h);
+      window.removeEventListener("appinstalled", done);
+    };
   }, []);
 
   const steps =

@@ -63,12 +63,14 @@ export async function GET(req: Request) {
   // Calculadora de campeonato con datos reales.
   let titleCalc = null;
   if (cal && drivers && drivers.rows.length) {
-    const remaining = cal.filter((r) => r.round > drivers.round);
+    // Carreras que aún no suman a la clasificación: posteriores a la última ronda contada
+    // o que todavía no terminan (la clasificación puede actualizarse tras el sprint del sábado).
+    const remaining = cal.filter((r) => r.round > drivers.round || new Date(r.start).getTime() + 3 * 3600000 > now);
     const races = remaining.length;
-    // Un sprint ya disputado (sus puntos ya están en la clasificación) no se vuelve a contar.
+    // Un sprint ya disputado y contado no se vuelve a sumar.
     const sprints = remaining.filter((r) => {
       const sp = r.sessions.find((x) => x.key === "sprint");
-      return sp && new Date(sp.start).getTime() + 3600000 > now;
+      return sp && (r.round > drivers.round || new Date(sp.start).getTime() + 3600000 > now);
     }).length;
     const maxLeft = races * RACE_MAX + sprints * SPRINT_MAX;
     const leaderPts = drivers.rows[0].points;

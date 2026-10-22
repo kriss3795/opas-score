@@ -6,18 +6,9 @@ import { useApp } from "@/lib/client/store";
 import { fmtDay, fmtTime } from "@/lib/i18n";
 import { IconBack } from "@/components/Icons";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { roundLabel } from "@/lib/tennisRound";
 
-function roundLabel(r: string, fr: boolean) {
-  const m = r.match(/round (\d+)/i);
-  if (/qualif/i.test(r)) return fr ? "Qualifications" : "Clasificación";
-  if (/semi/i.test(r)) return fr ? "Demi-finale" : "Semifinal";
-  if (/quarter/i.test(r)) return fr ? "Quart de finale" : "Cuartos de final";
-  if (/round of 16/i.test(r)) return fr ? "Huitième de finale" : "Octavos de final";
-  if (/^final$/i.test(r.trim())) return fr ? "Finale" : "Final";
-  if (m) return fr ? `${m[1]}${m[1] === "1" ? "er" : "e"} tour` : `${m[1]}.ª ronda`;
-  return r;
-}
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default function TennisMatch({ params }: { params: Promise<{ tour: string; id: string }> }) {
   const { tour, id } = use(params);
@@ -93,7 +84,7 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
                 {x.state !== "post" ? "•" : x.won ? (fr ? "V" : "G") : fr ? "D" : "P"}
               </span>
               <span className="min-w-0 flex-1 truncate text-muted">
-                {roundLabel(x.round, fr)} · {x.opp}
+                {roundLabel(x.round, lang)} · {x.opp}
               </span>
               <span className="font-score font-bold">{x.score}</span>
             </li>
@@ -110,7 +101,7 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
           🎾 {m.tournament} · {m.tour.toUpperCase()}
         </div>
         <div className="mt-1 text-sm text-muted">
-          {m.round ? roundLabel(m.round, fr) : ""}
+          {m.round ? roundLabel(m.round, lang) : ""}
           {m.court ? ` · ${m.court}` : ""}
         </div>
         <div className="mt-3 divide-y divide-line">

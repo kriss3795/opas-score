@@ -11,6 +11,7 @@ import TeamLogo from "./TeamLogo";
 import { agendaParams } from "@/lib/client/useEvents";
 import { playSound } from "@/lib/client/sounds";
 import { gpName } from "@/lib/f1names";
+import { roundLabel } from "@/lib/tennisRound";
 import { IconBell, IconTv } from "./Icons";
 
 const SESSION_KEY: Record<string, Key> = {
@@ -75,19 +76,6 @@ function eventName(e: SportEvent, t: (k: Key) => string, lang: "fr" | "es") {
   if (e.sport === "f1") return `${gpName(e.competitionName, lang)} · ${sessionLabel(e.title ?? "race", t)}`;
   if (e.home && e.away) return `${e.home.name} – ${e.away.name}`;
   return e.title ?? e.competitionName;
-}
-
-// Rondas de tenis: la fuente las publica en inglés.
-function roundLabel(r: string, lang: "fr" | "es") {
-  const fr = lang === "fr";
-  const m = r.match(/round (\d+)/i);
-  if (/qualif/i.test(r)) return fr ? "Qualifications" : "Clasificación";
-  if (/semi/i.test(r)) return fr ? "Demi-finale" : "Semifinal";
-  if (/quarter/i.test(r)) return fr ? "Quart de finale" : "Cuartos de final";
-  if (/round of 16/i.test(r)) return fr ? "Huitième de finale" : "Octavos de final";
-  if (/^final$/i.test(r.trim())) return fr ? "Finale" : "Final";
-  if (m) return fr ? `${m[1]}${m[1] === "1" ? "er" : "e"} tour` : `${m[1]}.ª ronda`;
-  return r;
 }
 
 export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<string> }) {

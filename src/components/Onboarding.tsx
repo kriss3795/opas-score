@@ -455,17 +455,29 @@ function AthletePicker({ selected, sports, onToggle }: { selected: AthleteOption
     const query = q.trim();
     if (query.length < 3) {
       setRes(null);
+      setBusy(false);
       return;
     }
     setBusy(true);
+    // Una respuesta de una búsqueda anterior (más lenta) no pisa la de lo último que escribió.
+    let alive = true;
     const id = setTimeout(() => {
       fetch(`/api/athletes?q=${encodeURIComponent(query)}`)
         .then((r) => r.json())
-        .then((d) => setRes((d.athletes ?? []).filter((a: AthleteOption) => allowed.includes(a.sport))))
-        .catch(() => setRes([]))
-        .finally(() => setBusy(false));
+        .then((d) => {
+          if (alive) setRes((d.athletes ?? []).filter((a: AthleteOption) => allowed.includes(a.sport)));
+        })
+        .catch(() => {
+          if (alive) setRes([]);
+        })
+        .finally(() => {
+          if (alive) setBusy(false);
+        });
     }, 350);
-    return () => clearTimeout(id);
+    return () => {
+      alive = false;
+      clearTimeout(id);
+    };
     // sportsKey (texto) en vez del arreglo: evita repetir la búsqueda en cada render.
   }, [q, sportsKey]);
 

@@ -164,8 +164,13 @@ function drumroll(c: AudioContext, t: number, dur: number) {
   }
 }
 
+// El mismo sonido no se repite en pocos segundos (p. ej. gol detectado en pantalla y por el aviso a la vez).
+const lastPlayed: Partial<Record<string, number>> = {};
+
 export function playSound(kind: SoundKind, force = false) {
   if (!force && !soundsEnabled()) return;
+  if (!force && Date.now() - (lastPlayed[kind] ?? 0) < 10000) return;
+  lastPlayed[kind] = Date.now();
   const c = ac();
   if (!c) return;
   const t = c.currentTime + 0.05;

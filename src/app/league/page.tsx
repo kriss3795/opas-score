@@ -419,7 +419,7 @@ function ScorePredict({
   return (
     <div className="rounded-2xl bg-card p-4">
       <div className="mb-3 text-xs font-semibold text-muted">
-        {e.competition} · {fmtDay(e.start, lang)} {fmtTime(e.start, lang)}
+        {leagueMeta(e.key.split("|")[1])?.name[lang] ?? e.competition} · {fmtDay(e.start, lang)} {fmtTime(e.start, lang)}
       </div>
       <div className="grid grid-cols-[1fr_auto] items-center gap-y-3">
         <span className="flex items-center gap-2 leading-tight font-semibold">
