@@ -1,0 +1,182 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useApp } from "@/lib/client/store";
+import { leagueMeta, sportMeta } from "@/lib/catalog";
+import { currentSubscription, enablePush, isStandalone, platform, pushSupported, sendTest } from "@/lib/client/push";
+import { SportIcon } from "@/components/Icons";
+import TeamLogo from "@/components/TeamLogo";
+
+export default function SettingsPage() {
+  const { t, lang, prefs, update } = useApp();
+  const [notif, setNotif] = useState<"on" | "off" | "denied" | "unsupported">("off");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      if (!pushSupported()) return setNotif("unsupported");
+      if (Notification.permission === "denied") return setNotif("denied");
+      setNotif((await currentSubscription()) ? "on" : "off");
+    })();
+  }, []);
+
+  const activate = async () => {
+    const r = await enablePush(lang);
+    if (r === "ok") setNotif("on");
+    else if (r === "denied") setNotif("denied");
+    else setMsg(t("dataError"));
+  };
+
+  const iosNotInstalled = platform() === "ios" && !isStandalone();
+
+  return (
+    <div className="pt-safe space-y-6 px-4 pb-4">
+      <h1 className="pt-2 text-2xl font-extrabold tracking-tight">{t("tabSettings")}</h1>
+
+      <Group title={t("mySports")}>
+        <div className="space-y-3 p-4">
+          {prefs.sports.map((s) => (
+            <div key={s} className="flex items-center gap-2 font-bold" style={{ color: sportMeta(s).color }}>
+              <SportIcon sport={s} className="h-5 w-5" /> {sportMeta(s).name[lang]}
+            </div>
+          ))}
+          {prefs.leagues.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {prefs.leagues.map((l) => (
+                <span key={l} className="rounded-full bg-card2 px-2.5 py-1 text-sm">
+                  {leagueMeta(l)?.flag} {leagueMeta(l)?.name[lang]}
+                </span>
+              ))}
+            </div>
+          )}
+          {prefs.teams.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {prefs.teams.map((tm) => (
+                <span key={tm.id} className="flex items-center gap-1.5 rounded-full bg-card2 py-1 pr-2.5 pl-1 text-sm">
+                  <TeamLogo src={tm.logo} name={tm.name} size={18} /> {tm.short ?? tm.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {prefs.drivers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {prefs.drivers.map((d) => (
+                <span key={d.id} className="rounded-full bg-f1/15 px-2.5 py-1 text-sm">
+                  🏎️ {d.name}
+                </span>
+              ))}
+            </div>
+          )}
+          <Link href="/onboarding" className="block rounded-xl bg-brand py-3 text-center font-bold text-white">
+            {t("edit")}
+          </Link>
+        </div>
+      </Group>
+
+      <Group title={t("notifications")}>
+        <div className="space-y-3 p-4">
+          {notif === "on" && (
+            <>
+              <p className="font-semibold text-football">✓ {t("notifOn")}</p>
+              <button onClick={async () => setMsg((await sendTest()) ? "✓" : t("dataError"))} className="w-full rounded-xl bg-card2 py-3 font-semibold">
+                {t("testNotif")}
+              </button>
+            </>
+          )}
+          {notif === "off" &&
+            (iosNotInstalled ? (
+              <Link href="/install" className="block text-sm text-brand2">
+                {t("notifNeedInstall")} →
+              </Link>
+            ) : (
+              <button onClick={activate} className="w-full rounded-xl bg-brand py-3 font-bold text-white">
+                {t("enableNotif")}
+              </button>
+            ))}
+          {notif === "denied" && <p className="text-sm text-muted">{t("notifDenied")}</p>}
+          {notif === "unsupported" && (
+            <Link href="/install" className="block text-sm text-brand2">
+              {t("notifNeedInstall")} →
+            </Link>
+          )}
+          {msg && <p className="text-sm text-muted">{msg}</p>}
+        </div>
+      </Group>
+
+      <Group title={t("language")}>
+        <Segmented
+          value={prefs.lang ?? "auto"}
+          options={[
+            { v: "auto", label: t("phoneLang") },
+            { v: "fr", label: "Français" },
+            { v: "es", label: "Español" },
+          ]}
+          onChange={(v) => update({ lang: v === "auto" ? null : (v as "fr" | "es") })}
+        />
+      </Group>
+
+      <Group title={t("theme")}>
+        <Segmented
+          value={prefs.theme}
+          options={[
+            { v: "dark", label: t("dark") },
+            { v: "light", label: t("light") },
+          ]}
+          onChange={(v) => update({ theme: v as "dark" | "light" })}
+        />
+      </Group>
+
+      {!isStandalone() && (
+        <Link href="/install" className="block rounded-2xl bg-card px-4 py-4 font-semibold">
+          📲 {t("install")}
+        </Link>
+      )}
+
+      <Group title={t("dataSources")}>
+        <div className="space-y-2 p-4 text-sm text-muted">
+          <p>{t("sourcesNote")}</p>
+          <p>
+            ESPN · football-data.org · Jolpica-F1 · OpenF1 · Open-Meteo
+          </p>
+        </div>
+      </Group>
+
+      {process.env.NEXT_PUBLIC_REPORT_EMAIL && (
+      <a
+        href={`mailto:${process.env.NEXT_PUBLIC_REPORT_EMAIL}?subject=${encodeURIComponent("Opa's Score – " + t("reportError"))}`}
+        className="block rounded-2xl bg-card px-4 py-4 text-center font-semibold"
+      >
+        ✉️ {t("reportError")}
+      </a>
+      )}
+
+      <p className="pt-2 text-center text-xs text-muted">Opa&apos;s Score · Kriss &amp; Vale</p>
+    </div>
+  );
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-muted uppercase">{title}</h2>
+      <div className="overflow-hidden rounded-2xl bg-card">{children}</div>
+    </section>
+  );
+}
+
+function Segmented({ value, options, onChange }: { value: string; options: { v: string; label: string }[]; onChange: (v: string) => void }) {
+  return (
+    <div className="flex gap-1 p-1.5">
+      {options.map((o) => (
+        <button
+          key={o.v}
+          onClick={() => onChange(o.v)}
+          className={`flex-1 rounded-xl py-2.5 text-sm font-semibold ${value === o.v ? "bg-text text-bg" : "text-muted"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}

@@ -1,103 +1,125 @@
+"use client";
+
 import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useApp } from "@/lib/client/store";
+import { useAgenda } from "@/lib/client/useEvents";
+import { dayKey, fmtDay } from "@/lib/i18n";
+import { isStandalone, platform } from "@/lib/client/push";
+import EventCard from "@/components/EventCard";
+import type { SportEvent } from "@/lib/types";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { t, lang, prefs } = useApp();
+  const { events, error, failed } = useAgenda();
+  const [showInstall, setShowInstall] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    setShowInstall(!isStandalone() && platform() !== "desktop");
+  }, []);
+
+  const favIds = useMemo(() => new Set(prefs.teams.map((x) => x.id)), [prefs.teams]);
+
+  const groups = useMemo(() => {
+    if (!events) return null;
+    const live = events.filter((e) => e.status === "in");
+    const now = Date.now();
+    const upcoming = events.filter((e) => e.status === "pre" || (e.status === "cancelled" && new Date(e.start).getTime() > now));
+    const recent = events
+      .filter((e) => e.status === "post")
+      .sort((a, b) => b.start.localeCompare(a.start))
+      .slice(0, 20);
+    const byDay: { key: string; label: string; items: SportEvent[] }[] = [];
+    for (const e of upcoming) {
+      const k = dayKey(e.start);
+      let g = byDay.find((x) => x.key === k);
+      if (!g) {
+        g = { key: k, label: fmtDay(e.start, lang), items: [] };
+        byDay.push(g);
+      }
+      g.items.push(e);
+    }
+    // Favoritos primero dentro de cada día, respetando la hora.
+    return { live, byDay, recent };
+  }, [events, lang]);
+
+  return (
+    <div className="pt-safe px-4">
+      <header className="flex items-center gap-3 pt-2 pb-4">
+        <Image src="/logo.png" alt="Opa's Score" width={900} height={742} className="h-12 w-auto" priority />
+        <h1 className="text-2xl font-extrabold tracking-tight">{t("myProgramme")}</h1>
+      </header>
+
+      {showInstall && (
+        <Link href="/install" className="mb-4 flex items-center justify-between rounded-2xl bg-brand2/15 px-4 py-3 text-sm font-semibold text-brand2">
+          {t("installTitle")}
+          <span aria-hidden>→</span>
+        </Link>
+      )}
+
+      {error && <Notice text={t("dataError")} />}
+      {!error && failed.length > 0 && events && events.length > 0 && <Notice text={t("dataError")} small />}
+
+      {!groups && !error && <Skeleton />}
+
+      {groups && (
+        <div className="space-y-7">
+          {groups.live.length > 0 && (
+            <Section title={t("live")} live>
+              {groups.live.map((e) => (
+                <EventCard key={e.id} e={e} favIds={favIds} />
+              ))}
+            </Section>
+          )}
+
+          {groups.byDay.map((g) => (
+            <Section key={g.key} title={g.label}>
+              {g.items.map((e) => (
+                <EventCard key={e.id} e={e} favIds={favIds} />
+              ))}
+            </Section>
+          ))}
+
+          {groups.live.length === 0 && groups.byDay.length === 0 && (
+            <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">{t("nothing")}</p>
+          )}
+
+          {groups.recent.length > 0 && (
+            <Section title={t("recent")}>
+              {groups.recent.map((e) => (
+                <EventCard key={e.id} e={e} favIds={favIds} />
+              ))}
+            </Section>
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, live, children }: { title: string; live?: boolean; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className={`mb-2.5 flex items-center gap-2 text-sm font-bold tracking-wide uppercase ${live ? "text-live" : "text-muted"}`}>
+        {live && <span className="live-dot h-2 w-2 rounded-full bg-live" />}
+        {title}
+      </h2>
+      <div className="space-y-2.5">{children}</div>
+    </section>
+  );
+}
+
+function Notice({ text, small }: { text: string; small?: boolean }) {
+  return <p className={`mb-4 rounded-xl bg-card px-4 ${small ? "py-2 text-xs" : "py-3 text-sm"} text-muted`}>{text}</p>;
+}
+
+function Skeleton() {
+  return (
+    <div className="space-y-2.5">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="h-24 animate-pulse rounded-2xl bg-card" />
+      ))}
     </div>
   );
 }
