@@ -66,7 +66,10 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
   const next = () => (idx < steps.length - 1 ? setStep(steps[idx + 1]) : finish());
   const back = () => (idx > 0 ? setStep(steps[idx - 1]) : editing ? router.push("/settings") : undefined);
 
-  useEffect(() => window.scrollTo(0, 0), [step]);
+  // En Chrome reciente scrollTo devuelve una promesa: no debe usarse como función de limpieza.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
 
   const toggle = <T,>(list: T[], item: T, eq: (a: T, b: T) => boolean) =>
     list.some((x) => eq(x, item)) ? list.filter((x) => !eq(x, item)) : [...list, item];

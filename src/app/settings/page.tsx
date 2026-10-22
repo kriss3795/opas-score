@@ -31,7 +31,9 @@ export default function SettingsPage() {
 
   // Se calcula en el teléfono (no en el servidor) para evitar diferencias al cargar.
   const [env, setEnv] = useState({ iosNotInstalled: false, standalone: true });
-  useEffect(() => setEnv({ iosNotInstalled: platform() === "ios" && !isStandalone(), standalone: isStandalone() }), []);
+  useEffect(() => {
+    setEnv({ iosNotInstalled: platform() === "ios" && !isStandalone(), standalone: isStandalone() });
+  }, []);
   const iosNotInstalled = env.iosNotInstalled;
 
   return (
@@ -215,7 +217,9 @@ function SoundSettings() {
   const { lang } = useApp();
   const fr = lang === "fr";
   const [on, setOn] = useState(true);
-  useEffect(() => setOn(soundsEnabled()), []);
+  useEffect(() => {
+    setOn(soundsEnabled());
+  }, []);
   const tests: [SoundKind, string][] = [
     ["goal", fr ? "⚽ But" : "⚽ Gol"],
     ["start", fr ? "🟢 Coup d'envoi" : "🟢 Inicio"],
