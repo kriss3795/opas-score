@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { allTeams } from "@/lib/server/espn";
 
+export const maxDuration = 60;
+
 // Lista completa de equipos (clubes y selecciones) de todas las competiciones cubiertas.
 export async function GET() {
   const teams = await allTeams();

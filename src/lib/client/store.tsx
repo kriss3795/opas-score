@@ -40,6 +40,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const update = useCallback<Ctx["update"]>((patch) => {
     setPrefs((p) => {
       const next = { ...p, ...(typeof patch === "function" ? patch(p) : patch) };
+      if (next.important.length > 150) next.important = next.important.slice(-150);
       try {
         localStorage.setItem(KEY, JSON.stringify(next));
       } catch {

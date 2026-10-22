@@ -79,7 +79,7 @@ export async function upcomingFor(comps: string[], f1: boolean): Promise<Predict
 async function resultOf(key: string): Promise<any | null> {
   const [kind, a, b] = key.split("|");
   if (kind === "fb") {
-    const d = await eventSummary(a, b);
+    const d = await eventSummary(a, b, 600);
     const comp = d?.header?.competitions?.[0];
     if (comp?.status?.type?.state !== "post") return null;
     const cs: any[] = comp.competitors ?? [];
@@ -171,7 +171,8 @@ export async function leagueState(code: string, token?: string) {
         .map((b) => {
           const r = results.get(b.event_key);
           const out = r ? outcome(r) : null;
-          return { key: b.event_key, pick: b.pick, stake: b.stake, odds: Number(b.odds), label: b.label, start: b.start_at, result: r ?? null, won: out ? out === b.pick : null };
+          const voided = !r && b.start_at && Date.now() - new Date(b.start_at).getTime() > 3 * 86400000;
+          return { key: b.event_key, pick: b.pick, stake: b.stake, odds: Number(b.odds), label: b.label, start: b.start_at, result: r ?? null, won: out ? out === b.pick : null, voided };
         })
         .sort((a, b) => String(b.start).localeCompare(String(a.start)))
     : [];
@@ -197,7 +198,9 @@ export function wallet(memberId: string, bets: any[], results: Map<string, any>)
   for (const b of bets.filter((x) => x.member_id === memberId)) {
     const r = results.get(b.event_key);
     if (!r) {
-      pending += b.stake;
+      // Partido aplazado o sin resultado 3 días después: apuesta anulada y fichas devueltas.
+      const stale = b.start_at && Date.now() - new Date(b.start_at).getTime() > 3 * 86400000;
+      if (!stale) pending += b.stake;
       continue;
     }
     balance += outcome(r) === b.pick ? Math.round(b.stake * Number(b.odds)) - b.stake : -b.stake;

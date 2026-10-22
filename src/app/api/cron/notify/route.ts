@@ -3,6 +3,8 @@ import { supa, sendPush } from "@/lib/server/push";
 import { isMorning, localDate, morningSummary } from "@/lib/server/morning";
 import { eventState, liveAlerts } from "@/lib/server/live";
 
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 
 // Lo llama cron-job.org cada minuto. Envía los avisos de 15 min antes

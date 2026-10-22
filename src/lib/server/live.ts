@@ -15,8 +15,9 @@ export interface LiveState {
 // Estado actual (real) de un partido seguido, leído de ESPN.
 export async function eventState(league: string, eventId: string, start: string) {
   if (!leagueMeta(league)) return null;
+  // ESPN agrupa los partidos por día de EE. UU.: se mira también el día anterior.
   const d = new Date(start);
-  const evs = await teamScoreboard(league, d, d);
+  const evs = await teamScoreboard(league, new Date(d.getTime() - 86400000), d);
   const e = evs?.find((x) => x.id === eventId);
   if (!e) return null;
   return {
@@ -36,7 +37,8 @@ export function liveAlerts(prev: LiveState | null, cur: LiveState, e: any, lang:
   const tag = `live-${e.id}`;
   const goalWord = e.sport === "football" ? (fr ? "⚽ BUUUT !" : "⚽ ¡GOOOL!") : fr ? "🔔 Score" : "🔔 Marcador";
 
-  if ((!prev || prev.s === "pre") && cur.s === "in") {
+  const startedAgo = Date.now() - new Date(e.start).getTime();
+  if ((!prev || prev.s === "pre") && cur.s === "in" && startedAgo < 20 * 60000) {
     out.push({ title: fr ? "🟢 C'est parti !" : "🟢 ¡Empezó!", body: `${h} – ${a}`, url, tag, kind: "start" });
   }
   if (prev && prev.s === "in" && cur.s === "in") {

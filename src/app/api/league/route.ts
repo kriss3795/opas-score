@@ -3,6 +3,8 @@ import { supa } from "@/lib/server/push";
 import { leagueState, memberWallet, newCode, newToken, upcomingFor } from "@/lib/server/league";
 import { leagueMeta } from "@/lib/catalog";
 
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 
 const cleanName = (s: unknown) => String(s ?? "").trim().replace(/\s+/g, " ").slice(0, 24);

@@ -293,7 +293,7 @@ function LeagueView({ code, token }: { code: string; token: string }) {
                 </span>
               </span>
               <span className={`font-score text-xl font-extrabold ${b.won ? "text-football" : b.won === false ? "text-live" : "text-muted"}`}>
-                {b.won === null ? "⏳" : b.won ? `+${Math.round(b.stake * b.odds) - b.stake}` : `−${b.stake}`}
+                {b.voided ? (fr ? "annulé" : "anulada") : b.won === null ? "⏳" : b.won ? `+${Math.round(b.stake * b.odds) - b.stake}` : `−${b.stake}`}
               </span>
             </div>
           ))}

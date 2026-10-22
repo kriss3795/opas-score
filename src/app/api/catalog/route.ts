@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { LEAGUES } from "@/lib/catalog";
 import { getJson } from "@/lib/server/http";
 
+export const maxDuration = 60;
+
 // Comprueba cada día qué competiciones responden en la fuente.
 // La app solo ofrece las que funcionan: ninguna liga vacía ni inventada.
 /* eslint-disable @typescript-eslint/no-explicit-any */

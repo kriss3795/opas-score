@@ -29,13 +29,16 @@ export default function SettingsPage() {
     else setMsg(t("dataError"));
   };
 
-  const iosNotInstalled = platform() === "ios" && !isStandalone();
+  // Se calcula en el teléfono (no en el servidor) para evitar diferencias al cargar.
+  const [env, setEnv] = useState({ iosNotInstalled: false, standalone: true });
+  useEffect(() => setEnv({ iosNotInstalled: platform() === "ios" && !isStandalone(), standalone: isStandalone() }), []);
+  const iosNotInstalled = env.iosNotInstalled;
 
   return (
     <div className="pt-safe space-y-6 px-4 pb-4">
       <h1 className="pt-2 text-2xl font-extrabold tracking-tight">{t("tabSettings")}</h1>
 
-      {!isStandalone() && (
+      {!env.standalone && (
         <Link href="/install" className="flex items-center gap-3 rounded-2xl bg-brand px-4 py-4 font-extrabold text-white">
           <span className="text-2xl">📲</span> {t("install")}
         </Link>

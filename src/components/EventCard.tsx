@@ -30,9 +30,9 @@ export function sessionLabel(key: string, t: (k: Key) => string) {
 export function StatusBadge({ e }: { e: SportEvent }) {
   const { t, lang } = useApp();
   if (e.status === "in") {
-    const detail = e.statusDetail === "HT" ? t("halftime") : e.sport === "football" || e.sport === "rugby" ? e.statusDetail ?? t("live") : t("live");
+    const detail = e.statusDetail === "HT" ? t("halftime") : e.sport === "f1" || !e.statusDetail ? t("live") : e.statusDetail;
     return (
-      <span className="flex items-center gap-1.5 text-sm font-bold whitespace-nowrap text-live">
+      <span className="flex items-center gap-1.5 text-right text-sm leading-tight font-bold text-live">
         <span className="live-dot h-2 w-2 rounded-full bg-live" />
         {detail}
       </span>
@@ -70,6 +70,8 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
       return () => clearTimeout(id);
     }
     prev.current = now;
+    // Solo debe reaccionar a cambios de marcador o de estado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [e.home?.score, e.away?.score, e.status]);
 
   const toggleRemind = async (ev: React.MouseEvent) => {

@@ -128,7 +128,7 @@ export default function TablesPage() {
 
 // Calculadora con datos reales: quién puede ser campeón y quién está descendido o salvado.
 // Solo para ligas de fútbol a doble vuelta (3 puntos por victoria), donde el cálculo es exacto.
-const MATH_LEAGUES = new Set(["fra.1", "fra.2", "eng.1", "eng.2", "esp.1", "ita.1", "ger.1", "ger.2", "por.1", "ned.1", "bel.1", "tur.1", "chi.1", "bra.1", "ita.2", "esp.2"]);
+const MATH_LEAGUES = new Set(["fra.1", "fra.2", "eng.1", "eng.2", "esp.1", "ita.1", "ger.1", "ger.2", "por.1", "ned.1", "tur.1", "chi.1", "bra.1", "ita.2", "esp.2"]);
 
 function LeagueMath({ data }: { data: Standings }) {
   const { lang } = useApp();
@@ -143,7 +143,10 @@ function LeagueMath({ data }: { data: Standings }) {
   const champion = contenders.length === 1;
   const relIdx = rows.findIndex((r) => /relegat/i.test(r.note?.description ?? ""));
   const safePlaces = relIdx > 0 ? relIdx : -1;
-  const relegated = safePlaces > 0 ? rows.filter((r, i) => i >= safePlaces && maxOf(r) < rows[safePlaces - 1].points) : [];
+  // "Relegados" solo en zona de descenso directo (no en la de repechaje).
+  const directIdx = rows.findIndex((r) => /relegat/i.test(r.note?.description ?? "") && !/play-?off/i.test(r.note?.description ?? ""));
+  const relegated =
+    safePlaces > 0 && directIdx > 0 ? rows.filter((r, i) => i >= directIdx && maxOf(r) < rows[directIdx - 1].points) : [];
   const safe =
     safePlaces > 0 ? rows.filter((r) => rows.filter((o) => o !== r && maxOf(o) >= r.points).length < safePlaces) : [];
   const left = G - Math.min(...rows.map((r) => r.played ?? 0));

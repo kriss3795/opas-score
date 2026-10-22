@@ -5,6 +5,8 @@ import { f1Live } from "@/lib/server/espn";
 import { circuitWeather } from "@/lib/server/weather";
 import { sessionStatus } from "@/lib/server/f1events";
 
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 
 const RACE_MAX = 25; // puntos al ganador de un Gran Premio
@@ -62,7 +64,11 @@ export async function GET() {
   if (cal && drivers && drivers.rows.length) {
     const remaining = cal.filter((r) => r.round > drivers.round);
     const races = remaining.length;
-    const sprints = remaining.filter((r) => r.hasSprint).length;
+    // Un sprint ya disputado (sus puntos ya están en la clasificación) no se vuelve a contar.
+    const sprints = remaining.filter((r) => {
+      const sp = r.sessions.find((x) => x.key === "sprint");
+      return sp && new Date(sp.start).getTime() + 3600000 > now;
+    }).length;
     const maxLeft = races * RACE_MAX + sprints * SPRINT_MAX;
     const leaderPts = drivers.rows[0].points;
     titleCalc = {

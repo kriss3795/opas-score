@@ -9,7 +9,7 @@ const V2 = "https://site.api.espn.com/apis/v2/sports";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function mapStatus(st: any): { status: EventStatus; detail?: string } {
+function mapStatus(st: any, sport = "football"): { status: EventStatus; detail?: string } {
   const type = st?.type ?? {};
   const name: string = type.name ?? "";
   if (name.includes("POSTPONED")) return { status: "cancelled", detail: "postponed" };
@@ -17,7 +17,9 @@ function mapStatus(st: any): { status: EventStatus; detail?: string } {
     return { status: "cancelled", detail: "cancelled" };
   if (name.includes("HALFTIME")) return { status: "in", detail: "HT" };
   const state = type.state;
-  if (state === "in") return { status: "in", detail: st?.displayClock || type.shortDetail };
+  // Fútbol y rugby: el minuto ("67'"). Otros deportes: el periodo completo ("Q3 5:32", "2nd 10:14").
+  if (state === "in")
+    return { status: "in", detail: sport === "football" || sport === "rugby" ? st?.displayClock || type.shortDetail : type.shortDetail || st?.displayClock };
   if (state === "post") return { status: "post", detail: type.shortDetail };
   return { status: "pre" };
 }
@@ -82,7 +84,7 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
     // Torneos, veladas y carreras: un evento por fecha, sin rivales.
     for (const ev of data.events ?? []) {
       const comp = ev.competitions?.[0];
-      const { status, detail } = mapStatus(comp?.status ?? ev.status);
+      const { status, detail } = mapStatus(comp?.status ?? ev.status, meta.sport);
       out.push({
         id: String(ev.id),
         sport: meta.sport,
@@ -106,7 +108,7 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
     const h = cs.find((c) => c.homeAway === "home") ?? cs[0];
     const a = cs.find((c) => c.homeAway === "away") ?? cs[1];
     if (!h || !a) continue;
-    const { status, detail } = mapStatus(comp.status ?? ev.status);
+    const { status, detail } = mapStatus(comp.status ?? ev.status, meta?.sport);
     out.push({
       id: String(ev.id),
       sport: meta?.sport ?? "football",
@@ -145,11 +147,14 @@ export async function teamStandings(league: string): Promise<Standings | null> {
   const url = `${V2}/${meta.path}/standings`;
   const data = await getJson<any>(url, 900);
   if (!data) return null;
+  // Ligas de EE. UU. (NBA, NHL, NFL, MLB): se juntan conferencias y divisiones en una sola tabla.
+  const usSport = ["basketball", "hockey", "nfl", "baseball"].includes(meta.sport);
+  const collect = (node: any): any[] =>
+    node?.standings?.entries?.length ? node.standings.entries : (node?.children ?? []).flatMap((c: any) => collect(c));
   const groups: any[] = data.children?.length ? data.children : [data];
-  const g = groups[0];
-  const entries: any[] = g?.standings?.entries ?? [];
+  const entries: any[] = usSport ? collect(data) : groups[0]?.standings?.entries ?? [];
   if (!entries.length) return null;
-  const isNBA = meta.sport === "basketball";
+  const isNBA = usSport && meta.sport !== "hockey";
   const stat = (e: any, n: string) => {
     const s = (e.stats ?? []).find((x: any) => x.name === n);
     return s ? Number(s.value) : undefined;
@@ -165,9 +170,10 @@ export async function teamStandings(league: string): Promise<Standings | null> {
     lost: stat(e, "losses"),
     diff: stat(e, "pointDifferential") ?? stat(e, "differential"),
     points: isNBA ? stat(e, "wins") ?? 0 : stat(e, "points") ?? 0,
-    note: e.note ? { color: e.note.color, description: e.note.description } : undefined,
+    note: !usSport && e.note ? { color: e.note.color, description: e.note.description } : undefined,
   }));
-  if (isNBA) rows.sort((a, b) => b.points - a.points || (a.lost ?? 0) - (b.lost ?? 0)).forEach((r, i) => (r.rank = i + 1));
+  if (meta.sport === "hockey") rows.sort((a, b) => b.points - a.points || (b.won ?? 0) - (a.won ?? 0)).forEach((r, i) => (r.rank = i + 1));
+  else if (isNBA) rows.sort((a, b) => b.points - a.points || (a.lost ?? 0) - (b.lost ?? 0)).forEach((r, i) => (r.rank = i + 1));
   else rows.sort((a, b) => a.rank - b.rank);
   return {
     competitionId: league,
@@ -199,7 +205,7 @@ export async function teamsOf(league: string): Promise<TeamOption[] | null> {
 
 // Lista gigante: une los equipos de todas las competiciones del catálogo.
 export async function allTeams(): Promise<TeamOption[]> {
-  const results = await Promise.all(LEAGUES.map((l) => teamsOf(l.id)));
+  const results = await Promise.all(LEAGUES.filter((l) => l.kind !== "event").map((l) => teamsOf(l.id)));
   const map = new Map<string, TeamOption>();
   results.forEach((list) => {
     for (const tm of list ?? []) {
@@ -255,10 +261,10 @@ export async function eventDetail(league: string, id: string, day: string) {
   };
 }
 
-export async function eventSummary(league: string, id: string) {
+export async function eventSummary(league: string, id: string, revalidate = 30) {
   const meta = leagueMeta(league);
   if (!meta) return null;
-  return getJson<any>(`${SITE}/${meta.path}/summary?event=${encodeURIComponent(id)}`, 30);
+  return getJson<any>(`${SITE}/${meta.path}/summary?event=${encodeURIComponent(id)}`, revalidate);
 }
 
 // ---------- Tenis ----------
@@ -293,7 +299,7 @@ export async function tennisMatches(tour: string, playerIds: Set<string>, player
         const ids = cs.map((x) => String(x.id ?? x.athlete?.id ?? ""));
         const names = cs.map((x) => x.athlete?.displayName ?? "");
         if (!ids.some((i) => playerIds.has(i)) && !names.some((n) => playerNames.has(n))) continue;
-        const { status, detail } = mapStatus(c.status);
+        const { status, detail } = mapStatus(c.status, "tennis");
         const side = (x: any) => ({
           id: String(x.id ?? x.athlete?.id ?? ""),
           name: x.athlete?.displayName ?? "?",

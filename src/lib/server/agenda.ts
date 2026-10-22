@@ -22,8 +22,20 @@ export async function buildAgenda(q: AgendaQuery, from: Date, to: Date) {
   const playerNames = new Set(q.playerNames);
 
   const comps = new Set<string>([...leagues, ...teamLeagues]);
+  // Copas: solo las del país de los equipos favoritos y las europeas/internacionales de su deporte.
+  const DOMESTIC_CUPS: Record<string, string[]> = {
+    fra: ["fra.coupe_de_france"],
+    eng: ["eng.fa", "eng.league_cup"],
+    esp: ["esp.copa_del_rey"],
+    ita: ["ita.coppa_italia"],
+    ger: ["ger.dfb_pokal"],
+  };
+  const countries = new Set(teamLeagues.map((l) => l.split(".")[0]));
+  countries.forEach((c) => (DOMESTIC_CUPS[c] ?? []).forEach((x) => comps.add(x)));
   const teamSports = new Set(Array.from(teams).map((k) => k.split(":")[0]));
-  teamSports.forEach((s) => (CUP_LEAGUES[s] ?? []).forEach((c) => comps.add(c)));
+  teamSports.forEach((s) =>
+    (CUP_LEAGUES[s] ?? []).filter((c) => !Object.values(DOMESTIC_CUPS).flat().includes(c)).forEach((c) => comps.add(c)),
+  );
 
   const followed = new Set(leagues);
   const failed: string[] = [];

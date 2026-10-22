@@ -124,7 +124,7 @@ export const LEAGUES: LeagueMeta[] = [
   S("uefa.wchampions", n("Ligue des champions féminine", "Champions femenina"), "🇪🇺", "women"),
   S("eng.w.1", n("WSL (Angleterre)", "WSL (Inglaterra)"), "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "women"),
   // ---------- Fútbol: selecciones ----------
-  S("uefa.nations", n("Ligue des nations", "Liga de Naciones"), "🌍", "intl", { tvFR: "L'Équipe", cup: true }),
+  S("uefa.nations", n("Ligue des nations", "Liga de Naciones"), "🌍", "intl", { cup: true }),
   S("fifa.world", n("Coupe du monde", "Copa del Mundo"), "🏆", "intl", { cup: true }),
   S("uefa.euro", n("Euro"), "🇪🇺", "intl", { cup: true }),
   S("uefa.euroq", n("Qualifications Euro", "Clasificatorias Eurocopa"), "🇪🇺", "intl", { cup: true }),
@@ -192,6 +192,7 @@ export function leaguesOf(sport: SportId) {
 
 // Copas en las que un equipo favorito puede jugar aunque la competición no esté seguida.
 export const CUP_LEAGUES: Record<string, string[]> = {
+  // Las selecciones y copas sudamericanas ya llegan por las competiciones en las que figura cada equipo.
   football: [
     "uefa.champions",
     "uefa.europa",
@@ -202,10 +203,6 @@ export const CUP_LEAGUES: Record<string, string[]> = {
     "esp.copa_del_rey",
     "ita.coppa_italia",
     "ger.dfb_pokal",
-    "uefa.nations",
-    "fifa.friendly",
-    "conmebol.libertadores",
-    "conmebol.sudamericana",
   ],
   rugby: ["rugby.271937", "rugby.272073", "rugby.180659", "rugby.289234"],
 };
