@@ -16,11 +16,10 @@ let cache: { at: number; rows: EloFixture[] } | null = null;
 // La API CSV de partidos de ClubElo fue desactivada ("Fixtures API deactivated").
 // La misma tabla de partidos con probabilidades 1 / X / 2 está en clubelo.com/API (HTML): se lee de ahí.
 // Cada partido ocupa dos filas: local (con % de 1 y de X) y visita (con % de 2).
-export async function eloFixtures(): Promise<EloFixture[] | null> {
-  if (cache && Date.now() - cache.at < 3 * 3600000) return cache.rows;
+export async function eloPage(path: string): Promise<EloFixture[]> {
   try {
-    const res = await fetch("http://clubelo.com/API", { next: { revalidate: 10800 } });
-    if (!res.ok) return null;
+    const res = await fetch(`http://clubelo.com/${path}`, { next: { revalidate: 10800 } });
+    if (!res.ok) return [];
     const html = await res.text();
     const rows = Array.from(html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)).map((m) =>
       Array.from(m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)).map((c) => ({
@@ -59,12 +58,23 @@ export async function eloFixtures(): Promise<EloFixture[] | null> {
       out.push({ date: "", home: a.name, away: b.name, pHome: h / tot, pDraw: d / tot, pAway: w / tot });
       i++;
     }
-    if (!out.length) return null;
-    cache = { at: Date.now(), rows: out };
     return out;
   } catch {
-    return null;
+    return [];
   }
+}
+
+// Página general + la de cada país (cada una muestra los próximos partidos de su liga).
+const PAGES = ["API", "ENG", "ESP", "GER", "ITA", "FRA", "POR", "NED", "BEL", "SCO", "TUR", "AUT", "SUI", "GRE", "DEN"];
+
+export async function eloFixtures(): Promise<EloFixture[] | null> {
+  if (cache && Date.now() - cache.at < 3 * 3600000) return cache.rows;
+  const all = (await Promise.all(PAGES.map(eloPage))).flat();
+  const seen = new Set<string>();
+  const rows = all.filter((r) => (seen.has(`${r.home}|${r.away}`) ? false : (seen.add(`${r.home}|${r.away}`), true)));
+  if (!rows.length) return null;
+  cache = { at: Date.now(), rows };
+  return rows;
 }
 
 const norm = (s: string) =>
