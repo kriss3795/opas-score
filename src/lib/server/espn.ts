@@ -332,7 +332,8 @@ export async function teamStandings(league: string): Promise<Standings | null> {
     competitionId: league,
     competitionName: meta.name.fr,
     rows,
-    season: String(data?.children?.[0]?.standings?.seasonDisplayName ?? data?.seasons?.[0]?.displayName ?? "") || undefined,
+    // Solo el año ("2026-27 French Ligue 1" → "2026-27"): el resto viene en inglés.
+    season: String(data?.children?.[0]?.standings?.seasonDisplayName ?? data?.seasons?.[0]?.displayName ?? "").match(/\d{4}(?:[-/]\d{2,4})?/)?.[0],
     source: "ESPN",
     sourceUrl: `https://www.espn.com/${meta.path.split("/")[0]}/standings`,
   };
