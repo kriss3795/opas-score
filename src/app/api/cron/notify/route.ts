@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 }
 
 async function run(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
+  const secret = process.env.CRON_SECRET?.trim();
   const given = req.nextUrl.searchParams.get("key") ?? req.headers.get("authorization")?.replace("Bearer ", "");
   if (!secret || given !== secret) return NextResponse.json({ ok: false }, { status: 401 });
 
