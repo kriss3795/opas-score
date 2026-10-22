@@ -2,17 +2,36 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
+// Vibración distinta para cada tipo de aviso (Android). En iPhone suena el tono de notificación del sistema.
+const VIBRATE = {
+  goal: [120, 60, 120, 60, 400],
+  start: [500],
+  halftime: [200, 100, 200],
+  final: [200, 100, 200, 100, 600],
+  reminder: [100, 50, 100],
+  morning: [80],
+  test: [100, 50, 100],
+};
+
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = { title: "Opa's Score", body: event.data && event.data.text() }; }
+  const kind = data.kind || "reminder";
   event.waitUntil(
-    self.registration.showNotification(data.title || "Opa's Score", {
-      body: data.body || "",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      tag: data.tag,
-      data: { url: data.url || "/" },
-    })
+    (async () => {
+      // Si la app está abierta, además suena el sonido propio (gol, silbato…).
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      clients.forEach((c) => c.postMessage({ type: "opas-sound", kind }));
+      await self.registration.showNotification(data.title || "Opa's Score", {
+        body: data.body || "",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        tag: data.tag,
+        renotify: Boolean(data.tag),
+        vibrate: VIBRATE[kind] || VIBRATE.reminder,
+        data: { url: data.url || "/" },
+      });
+    })()
   );
 });
 
@@ -30,7 +49,7 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // Red primero; si no hay conexión, se sirve la última versión guardada de la página.
-const CACHE = "opas-v1";
+const CACHE = "opas-v2";
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || req.mode !== "navigate") return;

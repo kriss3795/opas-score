@@ -11,9 +11,10 @@ export async function POST(req: NextRequest) {
   const fr = data.lang !== "es";
   const r = await sendPush(data.sub, {
     title: "Opa's Score",
-    body: fr ? "Les notifications fonctionnent ⚽🏎️" : "Las notificaciones funcionan ⚽🏎️",
+    body: fr ? "⚽ BUUUT ! Les notifications fonctionnent." : "⚽ ¡GOOOL! Las notificaciones funcionan.",
     url: "/",
     tag: "test",
+    kind: "goal",
   });
   return NextResponse.json({ ok: r === "ok", result: r });
 }

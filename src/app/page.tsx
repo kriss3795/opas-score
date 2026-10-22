@@ -41,8 +41,10 @@ export default function Home() {
       g.items.push(e);
     }
     // Favoritos primero dentro de cada día, respetando la hora.
-    return { live, byDay, recent };
-  }, [events, lang]);
+    const followed = events.filter((e) => prefs.important.includes(e.id) && e.status !== "post");
+    const fset = new Set(followed.map((e) => e.id));
+    return { followed, live: live.filter((e) => !fset.has(e.id)), byDay: byDay.map((g) => ({ ...g, items: g.items.filter((e) => !fset.has(e.id)) })).filter((g) => g.items.length), recent };
+  }, [events, lang, prefs.important]);
 
   return (
     <div className="pt-safe px-4">
@@ -73,6 +75,14 @@ export default function Home() {
 
       {groups && (
         <div className="space-y-7">
+          {groups.followed.length > 0 && (
+            <Section title={`⭐ ${t("followed")}`}>
+              {groups.followed.map((e) => (
+                <EventCard key={`f-${e.id}`} e={e} favIds={favIds} />
+              ))}
+            </Section>
+          )}
+
           {groups.live.length > 0 && (
             <Section title={t("live")} live>
               {groups.live.map((e) => (

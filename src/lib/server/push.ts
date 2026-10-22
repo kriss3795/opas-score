@@ -27,6 +27,7 @@ export interface PushPayload {
   body: string;
   url?: string;
   tag?: string;
+  kind?: "goal" | "start" | "halftime" | "final" | "reminder" | "morning" | "test";
 }
 
 // Devuelve "gone" si la suscripción ya no existe (el teléfono la anuló).

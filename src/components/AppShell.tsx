@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useApp } from "@/lib/client/store";
 import { registerSW, syncPrefs } from "@/lib/client/push";
 import { agendaParams } from "@/lib/client/useEvents";
+import { playSound, unlockAudio } from "@/lib/client/sounds";
 import Welcome from "./Welcome";
 import { sportMeta } from "@/lib/catalog";
 import Onboarding from "./Onboarding";
@@ -17,6 +18,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     registerSW();
+    // Sonidos: se desbloquean con el primer toque y suenan cuando llega un aviso con la app abierta.
+    const unlock = () => unlockAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    const onMsg = (ev: MessageEvent) => {
+      if (ev.data?.type === "opas-sound") playSound(ev.data.kind);
+    };
+    navigator.serviceWorker?.addEventListener("message", onMsg);
+    return () => navigator.serviceWorker?.removeEventListener("message", onMsg);
   }, []);
 
   // Mantiene al servidor al día con los favoritos (para el resumen matinal).

@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       body: String(b.body ?? "").slice(0, 240),
       url: String(b.url ?? "/").slice(0, 200),
       start_at: start.toISOString(),
-      sent: false,
+      league: typeof b.league === "string" ? b.league.slice(0, 60) : null,
     },
     { onConflict: "endpoint,event_id" },
   );

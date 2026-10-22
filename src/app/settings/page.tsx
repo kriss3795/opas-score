@@ -7,6 +7,7 @@ import { leagueMeta, sportMeta } from "@/lib/catalog";
 import { currentSubscription, enablePush, isStandalone, platform, pushSupported, sendTest } from "@/lib/client/push";
 import TeamLogo from "@/components/TeamLogo";
 import { agendaParams } from "@/lib/client/useEvents";
+import { playSound, setSoundsEnabled, soundsEnabled, type SoundKind } from "@/lib/client/sounds";
 
 export default function SettingsPage() {
   const { t, lang, prefs, update } = useApp();
@@ -131,6 +132,10 @@ export default function SettingsPage() {
         </div>
       </Group>
 
+      <Group title={lang === "fr" ? "Sons" : "Sonidos"}>
+        <SoundSettings />
+      </Group>
+
       <Group title={t("language")}>
         <Segmented
           value={prefs.lang ?? "auto"}
@@ -199,6 +204,48 @@ function Segmented({ value, options, onChange }: { value: string; options: { v: 
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+function SoundSettings() {
+  const { lang } = useApp();
+  const fr = lang === "fr";
+  const [on, setOn] = useState(true);
+  useEffect(() => setOn(soundsEnabled()), []);
+  const tests: [SoundKind, string][] = [
+    ["goal", fr ? "⚽ But" : "⚽ Gol"],
+    ["start", fr ? "🟢 Coup d'envoi" : "🟢 Inicio"],
+    ["halftime", fr ? "⏸️ Mi-temps" : "⏸️ Entretiempo"],
+    ["final", fr ? "🏁 Fin" : "🏁 Final"],
+    ["reminder", fr ? "🔔 Rappel" : "🔔 Aviso"],
+  ];
+  return (
+    <div className="space-y-3 p-4">
+      <button
+        onClick={() => {
+          setSoundsEnabled(!on);
+          setOn(!on);
+        }}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <span className="font-semibold">{fr ? "Sons dans l'app (but, sifflet…)" : "Sonidos en la app (gol, silbato…)"}</span>
+        <span className={`h-7 w-12 shrink-0 rounded-full p-1 transition-colors ${on ? "bg-brand" : "bg-line"}`}>
+          <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${on ? "translate-x-5" : ""}`} />
+        </span>
+      </button>
+      <div className="flex flex-wrap gap-2">
+        {tests.map(([k, l]) => (
+          <button key={k} onClick={() => playSound(k, true)} className="rounded-full bg-card2 px-3 py-1.5 text-sm font-semibold">
+            {l}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs leading-relaxed text-muted">
+        {fr
+          ? "Quand l'app est ouverte, chaque événement a son propre son. App fermée, le téléphone utilise sa sonnerie de notification (sur Android, chaque type vibre différemment)."
+          : "Con la app abierta, cada evento tiene su propio sonido. Con la app cerrada, el teléfono usa su tono de notificación (en Android, cada tipo vibra distinto)."}
+      </p>
     </div>
   );
 }

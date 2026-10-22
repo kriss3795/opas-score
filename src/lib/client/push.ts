@@ -75,6 +75,7 @@ export async function setReminder(opts: {
   title: string;
   body: string;
   url: string;
+  league?: string;
 }): Promise<boolean> {
   const sub = await currentSubscription();
   if (!sub) return false;

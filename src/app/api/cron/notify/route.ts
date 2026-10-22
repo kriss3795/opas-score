@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supa, sendPush } from "@/lib/server/push";
 import { isMorning, localDate, morningSummary } from "@/lib/server/morning";
+import { eventState, liveAlerts } from "@/lib/server/live";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ async function run(req: NextRequest) {
       await db.from("reminders").delete().eq("id", r.id);
       continue;
     }
-    const res = await sendPush(s.sub, { title: r.title, body: r.body, url: r.url, tag: r.event_id });
+    const res = await sendPush(s.sub, { title: r.title, body: r.body, url: r.url, tag: r.event_id, kind: "reminder" });
     if (res === "gone") {
       await db.from("push_subs").delete().eq("endpoint", r.endpoint);
       await db.from("reminders").delete().eq("endpoint", r.endpoint);
@@ -52,6 +53,35 @@ async function run(req: NextRequest) {
     }
     if (res === "ok") sent++;
     await db.from("reminders").update({ sent: true }).eq("id", r.id);
+  }
+
+  // Alertas en vivo de los partidos seguidos: inicio, goles, entretiempo y final.
+  let live = 0;
+  const { data: follows, error: fErr } = await db
+    .from("reminders")
+    .select("id, endpoint, event_id, url, start_at, league, last_state")
+    .not("league", "is", null)
+    .lte("start_at", new Date(now + 2 * 60000).toISOString())
+    .gte("start_at", new Date(now - 4 * 3600000).toISOString())
+    .limit(200);
+  if (!fErr) {
+    const states = new Map<string, Awaited<ReturnType<typeof eventState>>>();
+    for (const f of follows ?? []) {
+      const k = `${f.league}|${f.event_id}`;
+      if (!states.has(k)) states.set(k, await eventState(f.league, f.event_id, f.start_at));
+      const st = states.get(k);
+      if (!st) continue;
+      const prev = f.last_state ?? null;
+      if (prev?.s === "post") continue;
+      const { data: subRow } = await db.from("push_subs").select("sub, lang").eq("endpoint", f.endpoint).maybeSingle();
+      if (!subRow) continue;
+      const alerts = liveAlerts(prev, st.state, st.e, subRow.lang === "es" ? "es" : "fr", f.url ?? "/");
+      for (const al of alerts) {
+        const r = await sendPush(subRow.sub, al);
+        if (r === "ok") live++;
+      }
+      if (JSON.stringify(prev) !== JSON.stringify(st.state)) await db.from("reminders").update({ last_state: st.state }).eq("id", f.id);
+    }
   }
 
   // Limpieza de avisos viejos.
@@ -69,10 +99,10 @@ async function run(req: NextRequest) {
     await db.from("push_subs").update({ last_morning: today }).eq("endpoint", s.endpoint);
     const sum = await morningSummary(s.prefs, s.lang === "es" ? "es" : "fr", tz).catch(() => null);
     if (!sum) continue;
-    const r = await sendPush(s.sub, { title: sum.title, body: sum.body, url: "/", tag: `morning-${today}` });
+    const r = await sendPush(s.sub, { title: sum.title, body: sum.body, url: "/", tag: `morning-${today}`, kind: "morning" });
     if (r === "gone") await db.from("push_subs").delete().eq("endpoint", s.endpoint);
     if (r === "ok") mornings++;
   }
 
-  return NextResponse.json({ ok: true, due: due?.length ?? 0, sent, mornings });
+  return NextResponse.json({ ok: true, due: due?.length ?? 0, sent, live, mornings, liveError: fErr?.message });
 }

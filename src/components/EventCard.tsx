@@ -9,6 +9,7 @@ import type { SportEvent, Side } from "@/lib/types";
 import { currentSubscription, enablePush, setReminder } from "@/lib/client/push";
 import TeamLogo from "./TeamLogo";
 import { agendaParams } from "@/lib/client/useEvents";
+import { playSound } from "@/lib/client/sounds";
 import { IconBell, IconTv } from "./Icons";
 
 const SESSION_KEY: Record<string, Key> = {
@@ -63,6 +64,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
     const now = `${e.home?.score}-${e.away?.score}`;
     if (prev.current !== now && e.status === "in") {
       setFlash(true);
+      if (important || fav(e.home) || fav(e.away)) playSound(e.sport === "football" ? "goal" : "reminder");
       const id = setTimeout(() => setFlash(false), 2500);
       prev.current = now;
       return () => clearTimeout(id);
@@ -87,7 +89,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
       }
       const name = eventName(e, t);
       const body = lang === "fr" ? `Dans 15 minutes${tv ? ` sur ${tv}` : ""} : ${name}` : `En 15 minutos${tv ? ` por ${tv}` : ""}: ${name}`;
-      const ok = await setReminder({ on: !important, eventId: e.id, start: e.start, title: `${meta.emoji} Opa's Score`, body, url: e.link ?? "/" });
+      const ok = await setReminder({ on: !important, eventId: e.id, start: e.start, title: `${meta.emoji} Opa's Score`, body, url: e.link ?? "/", league: e.home ? e.competitionId : undefined });
       if (ok) update((p) => ({ important: important ? p.important.filter((x) => x !== e.id) : [...p.important, e.id] }));
     } finally {
       setBusy(false);
