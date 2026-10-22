@@ -2,19 +2,18 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Diagnóstico temporal: ¿qué endpoints de ClubElo siguen activos?
-export async function GET() {
-  const day = new Date().toISOString().slice(0, 10);
-  const out: Record<string, unknown> = {};
-  for (const u of [`http://api.clubelo.com/${day}`, "http://api.clubelo.com/ParisSG", "http://clubelo.com/API"]) {
-    try {
-      const res = await fetch(u, { cache: "no-store" });
-      const text = await res.text();
-      const lines = text.trim().split(/\r?\n/);
-      out[u] = { status: res.status, lines: lines.length, head: lines.slice(0, 3), sample: lines.filter((l) => /paris|lyon|liverpool/i.test(l)).slice(-3) };
-    } catch (e) {
-      out[u] = { error: e instanceof Error ? e.message : String(e) };
-    }
+// Diagnóstico temporal del formato de ClubElo.
+export async function GET(req: Request) {
+  const u = new URL(req.url).searchParams.get("u") ?? "http://clubelo.com/API";
+  if (!/^https?:\/\/(api\.)?clubelo\.com\//.test(u)) return NextResponse.json({ error: "url" }, { status: 400 });
+  const off = Number(new URL(req.url).searchParams.get("off") ?? 0);
+  try {
+    const res = await fetch(u, { cache: "no-store" });
+    const text = await res.text();
+    return new NextResponse(`status ${res.status} type ${res.headers.get("content-type")} len ${text.length}\n` + text.slice(off, off + 4000), {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) });
   }
-  return NextResponse.json(out);
 }
