@@ -7,6 +7,16 @@ export const dynamic = "force-dynamic";
 // Lo llama cron-job.org cada minuto. Envía los avisos de 15 min antes
 // y, de paso, mantiene activa la base de Supabase (evita la pausa del plan gratuito).
 export async function GET(req: NextRequest) {
+  try {
+    return await run(req);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[cron]", msg);
+    return NextResponse.json({ ok: false, step: "exception", error: msg.slice(0, 200) }, { status: 500 });
+  }
+}
+
+async function run(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const given = req.nextUrl.searchParams.get("key") ?? req.headers.get("authorization")?.replace("Bearer ", "");
   if (!secret || given !== secret) return NextResponse.json({ ok: false }, { status: 401 });
@@ -25,7 +35,7 @@ export async function GET(req: NextRequest) {
     .lte("start_at", until)
     .gte("start_at", since)
     .limit(200);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ ok: false, step: "reminders", error: error.message }, { status: 500 });
 
   let sent = 0;
   for (const r of due ?? []) {
@@ -49,14 +59,15 @@ export async function GET(req: NextRequest) {
 
   // Resumen matinal a las 8:00 en la hora local de cada teléfono.
   let mornings = 0;
-  const { data: subs } = await db.from("push_subs").select("endpoint, sub, lang, tz, prefs, morning, last_morning").eq("morning", true).limit(50);
+  const { data: subs, error: subErr } = await db.from("push_subs").select("endpoint, sub, lang, tz, prefs, morning, last_morning").eq("morning", true).limit(50);
+  if (subErr) return NextResponse.json({ ok: true, due: due?.length ?? 0, sent, morningError: subErr.message });
   for (const s of subs ?? []) {
     const tz = s.tz || "Europe/Paris";
     if (!s.prefs || !isMorning(tz)) continue;
     const today = localDate(tz);
     if (s.last_morning === today) continue;
     await db.from("push_subs").update({ last_morning: today }).eq("endpoint", s.endpoint);
-    const sum = await morningSummary(s.prefs, s.lang === "es" ? "es" : "fr", tz);
+    const sum = await morningSummary(s.prefs, s.lang === "es" ? "es" : "fr", tz).catch(() => null);
     if (!sum) continue;
     const r = await sendPush(s.sub, { title: sum.title, body: sum.body, url: "/", tag: `morning-${today}` });
     if (r === "gone") await db.from("push_subs").delete().eq("endpoint", s.endpoint);
