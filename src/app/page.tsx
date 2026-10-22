@@ -26,8 +26,9 @@ export default function Home() {
   // El día elegido se recuerda al entrar a un partido y volver.
   useEffect(() => {
     try {
-      const d = sessionStorage.getItem("opas-day");
-      if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setDayState(d);
+      // Solo si fue hace poco (volver de un partido); al abrir la app otro día, se parte en "Lo próximo".
+      const [d, at] = (sessionStorage.getItem("opas-day") ?? "").split("|");
+      if (d && /^\d{4}-\d{2}-\d{2}$/.test(d) && Date.now() - Number(at) < 30 * 60000) setDayState(d);
     } catch {
       /* sin almacenamiento */
     }
@@ -35,7 +36,7 @@ export default function Home() {
   const setDay = (d: string | null) => {
     setDayState(d);
     try {
-      if (d) sessionStorage.setItem("opas-day", d);
+      if (d) sessionStorage.setItem("opas-day", `${d}|${Date.now()}`);
       else sessionStorage.removeItem("opas-day");
     } catch {
       /* sin almacenamiento */

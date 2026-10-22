@@ -45,7 +45,10 @@ export async function GET(req: NextRequest) {
               state: x.status?.type?.state,
               opp: op?.athlete?.displayName ?? "?",
               won: Boolean(me?.winner),
-              score: (me?.linescores ?? []).map((l: any, i: number) => `${l.value}-${op?.linescores?.[i]?.value ?? ""}`).join(" "),
+              // Sin sets en un partido terminado: walkover (W.O.).
+              score:
+                (me?.linescores ?? []).map((l: any, i: number) => `${l.value}-${op?.linescores?.[i]?.value ?? ""}`).join(" ") ||
+                (x.status?.type?.state === "post" ? "W.O." : ""),
             };
           })
           .filter((x: any) => !/^tbd$/i.test(x.opp))
@@ -61,7 +64,7 @@ export async function GET(req: NextRequest) {
             state: c.status?.type?.state ?? "pre",
             // Abandono o walkover: el marcador queda incompleto y se indica.
             ending: /RETIRED/.test(c.status?.type?.name ?? "") ? "RET" : /WALKOVER|FORFEIT/.test(c.status?.type?.name ?? "") ? "WO" : undefined,
-            detail: c.status?.period ? `Set ${c.status.period}` : undefined,
+            detail: c.status?.type?.state === "in" && c.status?.period ? `Set ${c.status.period}` : undefined,
             court: c.venue?.court ?? c.venue?.fullName,
             a,
             b,

@@ -295,7 +295,8 @@ export async function teamStandings(league: string): Promise<Standings | null> {
   });
   if (meta.sport === "hockey")
     rows
-      .sort((a, b) => b.points - a.points || (b.won ?? 0) - (a.won ?? 0))
+      // NHL: puntos; a igualdad, menos partidos jugados, más victorias y mejor diferencia.
+      .sort((a, b) => b.points - a.points || (a.played ?? 0) - (b.played ?? 0) || (b.won ?? 0) - (a.won ?? 0) || (b.diff ?? 0) - (a.diff ?? 0))
       .forEach((r, i) => (r.rank = i + 1));
   // NBA, NFL, MLB: orden por balance victorias − derrotas (equivale a "partidos de diferencia"),
   // luego victorias y diferencia de puntos. Un 1-0 va antes que un 0-0, y este antes que un 0-1.
