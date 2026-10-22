@@ -45,8 +45,15 @@ export function sameClub(club: ClubSpell, rival: string, league: string) {
   if (!x.length || x.join(" ") !== y.join(" ") || x.join("").length < 3) return false;
   if (/\b(B|II|U-?\d{2}|reserves?|youth|academy|women|femen)/i.test(club.label)) return false;
   if (x.length >= 2) return true;
-  const re = COUNTRY[league.split(".")[0]];
-  return Boolean(re && club.desc && re.test(club.desc));
+  // Copas internacionales (Champions, Libertadores…): el país del club debe ser de esa confederación.
+  const prefix = league.split(".")[0];
+  const REGION: Record<string, string[]> = {
+    uefa: ["fra", "eng", "esp", "ita", "ger", "por", "ned", "bel", "sco", "tur", "gre", "sui", "aut", "den", "swe", "nor"],
+    conmebol: ["bra", "arg", "chi", "col", "uru", "per", "ecu", "par"],
+    concacaf: ["mex", "usa"],
+  };
+  const res = COUNTRY[prefix] ? [COUNTRY[prefix]] : (REGION[prefix] ?? []).map((c) => COUNTRY[c]);
+  return Boolean(club.desc && res.some((re) => re.test(club.desc!)));
 }
 
 const year = (t?: string) => (t ? t.replace(/^\+/, "").slice(0, 4) : undefined);
