@@ -50,6 +50,8 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
     };
   }, [league, id]);
 
+  // Se recalculan cuando cambia el marcador o el estado (p. ej. un gol de un jugador seguido).
+  const factsKey = m ? `${m.state}-${m.home?.score}-${m.away?.score}` : "";
   useEffect(() => {
     let alive = true;
     fetch(`/api/facts?league=${league}&id=${id}&players=${encodeURIComponent(playersParam)}`)
@@ -61,7 +63,7 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
     return () => {
       alive = false;
     };
-  }, [league, id, playersParam]);
+  }, [league, id, playersParam, factsKey]);
 
   const meta = leagueMeta(league);
   const tv = isInFrance() ? meta?.tvFR : undefined;
@@ -402,9 +404,14 @@ function StatsBars({ stats, sport, all, season }: { stats: any[]; sport: string;
   const { lang } = useApp();
   if (!stats?.length) return null;
   const num = (v: string) => {
+    // "31:20" (tiempo de posesión) se compara en segundos.
+    const t = String(v).match(/^(\d+):(\d{2})$/);
+    if (t) return Number(t[1]) * 60 + Number(t[2]);
     const x = parseFloat(String(v).replace("%", "").replace(",", "."));
     return Number.isFinite(x) ? x : 0;
   };
+  // En faltas, tarjetas o pérdidas, tener menos es lo mejor: se resalta al que tiene menos.
+  const lowerBetter = (name: string) => /foul|yellow|red|turnover|offside|penalt(y|ies)Yards|interceptionsThrown|sacksAllowed|giveaway|error/i.test(name);
   return (
     <Card
       title={
@@ -424,6 +431,8 @@ function StatsBars({ stats, sport, all, season }: { stats: any[]; sport: string;
           const h = num(s.home);
           const a = num(s.away);
           const tot = h + a || 1;
+          const homeBest = lowerBetter(s.name) ? h <= a : h >= a;
+          const awayBest = lowerBetter(s.name) ? a <= h : a >= h;
           const pair = /-/.test(String(s.home)) && sport !== "football";
           return (
             <li key={s.name}>
@@ -435,10 +444,10 @@ function StatsBars({ stats, sport, all, season }: { stats: any[]; sport: string;
               {!pair && (
                 <div className="flex h-1.5 gap-1">
                   <div className="flex flex-1 justify-end overflow-hidden rounded-full bg-card2">
-                    <div className={`rounded-full ${h >= a ? "bg-brand" : "bg-brand/40"}`} style={{ width: `${(h / tot) * 100}%` }} />
+                    <div className={`rounded-full ${homeBest ? "bg-brand" : "bg-brand/40"}`} style={{ width: `${(h / tot) * 100}%` }} />
                   </div>
                   <div className="flex-1 overflow-hidden rounded-full bg-card2">
-                    <div className={`h-full rounded-full ${a >= h ? "bg-brand2" : "bg-brand2/40"}`} style={{ width: `${(a / tot) * 100}%` }} />
+                    <div className={`h-full rounded-full ${awayBest ? "bg-brand2" : "bg-brand2/40"}`} style={{ width: `${(a / tot) * 100}%` }} />
                   </div>
                 </div>
               )}

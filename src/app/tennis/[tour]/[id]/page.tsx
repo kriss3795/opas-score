@@ -110,7 +110,11 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
         </div>
         <div className={`mt-3 flex items-center gap-2 text-sm font-bold ${live ? "text-live" : "text-muted"}`}>
           {live && <span className="live-dot h-2 w-2 rounded-full bg-live" />}
-          {live ? m.detail : m.state === "post" ? t("final") : `${fmtDay(m.start, lang)} · ${fmtTime(m.start, lang)}`}
+          {live
+            ? m.detail
+            : m.state === "post"
+              ? t("final")
+              : `${fmtDay(m.start, lang)} · ${fmtTime(m.start, lang)} (${fr ? "horaire indicatif" : "hora estimada"})`}
         </div>
       </section>
       {(m.pathA.length > 0 || m.pathB.length > 0) && (

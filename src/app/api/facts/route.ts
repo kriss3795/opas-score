@@ -12,5 +12,7 @@ export async function GET(req: NextRequest) {
   if (!/^\d+$/.test(id)) return NextResponse.json({ facts: [] });
   const m = await matchDetail(league, id);
   const facts = m ? await matchFacts(m, followed).catch(() => []) : [];
-  return NextResponse.json({ facts }, { headers: { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=3600" } });
+  // En vivo se renuevan seguido (goles del partido); antes o después, cada 10 minutos.
+  const ttl = m?.state === "in" ? 60 : 600;
+  return NextResponse.json({ facts }, { headers: { "Cache-Control": `public, s-maxage=${ttl}, stale-while-revalidate=${ttl * 3}` } });
 }

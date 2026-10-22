@@ -1,6 +1,7 @@
 import "server-only";
 import { buildAgenda, queryFromPrefs } from "./agenda";
 import type { SportEvent } from "../types";
+import { gpName } from "../f1names";
 
 // Resumen matinal: qué pasó ayer y qué hay hoy, con datos reales y plantillas fijas.
 const SESSION: Record<string, { fr: string; es: string }> = {
@@ -36,7 +37,7 @@ export function localDate(tz: string, now = new Date()) {
 }
 
 function label(e: SportEvent, lang: "fr" | "es", withScore: boolean) {
-  if (e.sport === "f1") return `🏎️ ${SESSION[e.title ?? "race"]?.[lang] ?? ""}`.trim();
+  if (e.sport === "f1") return `🏎️ ${gpName(e.competitionName, lang)} · ${SESSION[e.title ?? "race"]?.[lang] ?? ""}`.trim();
   if (e.home && e.away) {
     const h = e.home.short ?? e.home.name;
     const a = e.away.short ?? e.away.name;

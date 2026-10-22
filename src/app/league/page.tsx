@@ -530,7 +530,10 @@ function LeagueTable({ rows }: { rows: any[] }) {
   const { lang } = useApp();
   const fr = lang === "fr";
   const [by, setBy] = useState<"points" | "coins">("points");
-  const sorted = [...rows].sort((a, b) => (by === "points" ? b.points - a.points || (b.accuracy ?? 0) - (a.accuracy ?? 0) : b.coins - a.coins));
+  const cmp = (a: any, b: any) => (by === "points" ? b.points - a.points || (b.accuracy ?? 0) - (a.accuracy ?? 0) : b.coins - a.coins);
+  const sorted = [...rows].sort(cmp);
+  // Empate exacto = misma posición (y misma medalla).
+  const place = (r: any) => 1 + sorted.filter((o) => cmp(o, r) < 0).length;
   return (
     <>
       <div className="flex gap-2">
@@ -546,9 +549,9 @@ function LeagueTable({ rows }: { rows: any[] }) {
         ))}
       </div>
       <section className="overflow-hidden rounded-2xl bg-card">
-        {sorted.map((r, i) => (
+        {sorted.map((r) => (
           <div key={r.name} className={`flex items-center gap-3 border-b border-line px-4 py-3 last:border-0 ${r.isMe ? "bg-brand/10" : ""}`}>
-            <span className="font-score w-7 text-center text-xl font-extrabold">{i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span>
+            <span className="font-score w-7 text-center text-xl font-extrabold">{place(r) <= 3 ? ["🥇", "🥈", "🥉"][place(r) - 1] : place(r)}</span>
             <span className="flex-1 leading-tight font-semibold">
               {r.name}
               {r.weekWins > 0 && <span className="ml-1.5 text-xs text-gold">🏅×{r.weekWins}</span>}
@@ -597,7 +600,7 @@ function PodiumPredict({ e, code, token, initial, drivers, onSaved }: { e: any; 
             className="flex-1 rounded-xl bg-card2 px-3 py-2.5 text-base"
           >
             <option value="">—</option>
-            {drivers.map((d) => (
+            {[...drivers].sort((x, y) => String(x.name).localeCompare(String(y.name))).map((d) => (
               <option key={d.id} value={d.id} disabled={p.includes(d.id) && p[i] !== d.id}>
                 {d.name}
               </option>

@@ -50,10 +50,21 @@ export function buildRows(starters: any[], formation?: string): any[][] | null {
   return rows;
 }
 
+// Apellido para la cancha; "Vinícius Júnior" o "Neymar Jr." conservan el nombre (si no, solo quedaría "Júnior").
 const short = (name: string) => {
   const parts = name.split(" ");
-  return parts.length > 1 ? parts.slice(1).join(" ") : name;
+  if (parts.length < 2) return name;
+  if (/^(j[uú]nior|jr\.?|filho|neto|sobrinho)$/i.test(parts[parts.length - 1])) return parts.slice(-2).join(" ");
+  return parts.slice(1).join(" ");
 };
+
+// Color de la camiseta: si es muy claro (blanco, amarillo), el número va en negro para que se lea.
+function isLight(hex: string) {
+  const h = hex.replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(h)) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 170;
+}
 
 export default function Pitch({ starters, formation, color }: { starters: any[]; formation?: string; color?: string }) {
   const { prefs, lang } = useApp();
@@ -80,7 +91,7 @@ export default function Pitch({ starters, formation, color }: { starters: any[];
                 <div key={k} className="flex w-[19%] flex-col items-center text-center">
                   <div
                     className="relative flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-sm font-extrabold text-white shadow"
-                    style={{ background: ri === 0 ? "#f5c542" : shirt, color: ri === 0 ? "#111" : undefined }}
+                    style={{ background: ri === 0 ? "#f5c542" : shirt, color: ri === 0 || (color && isLight(String(color))) ? "#111" : undefined }}
                   >
                     {p.jersey}
                     {p.goals ? <span className="absolute -top-1.5 -right-2 text-xs">{"⚽".repeat(Math.min(p.goals, 3))}</span> : null}
