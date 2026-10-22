@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supa } from "@/lib/server/push";
+import { supa, sendPush, lastPushError } from "@/lib/server/push";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,14 @@ export async function GET(req: NextRequest) {
   const db = supa();
   if (!db) return NextResponse.json({ ok: false, error: "db" });
   const now = Date.now();
-  const { data: subs } = await db.from("push_subs").select("lang, tz, prefs, morning, last_morning, created_at");
+  const { data: subs } = await db.from("push_subs").select("sub, lang, tz, prefs, morning, last_morning, created_at");
+  const { data: beat } = await db.from("fl_results").select("value").eq("event_key", "__cron").maybeSingle();
+  const tests: string[] = [];
+  if (req.nextUrl.searchParams.get("test") === "1")
+    for (const s of subs ?? []) {
+      const r = await sendPush(s.sub, { title: "Opa's Score", body: "🔧 Test", url: "/", tag: "diag", kind: "test" });
+      tests.push(r === "ok" ? "ok" : `${r}: ${lastPushError}`);
+    }
   const { data: rem } = await db
     .from("reminders")
     .select("event_id, league, start_at, sent, last_state, title")
@@ -19,11 +26,21 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     vapid: Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+    vapidPublicStart: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim().slice(0, 12),
+    cron: beat?.value ?? null,
+    tests,
     phones: (subs ?? []).map((s) => ({
       lang: s.lang,
       tz: s.tz,
       since: s.created_at,
       hasPrefs: Boolean(s.prefs),
+      endpointHost: (() => {
+        try {
+          return new URL((s.sub as { endpoint: string }).endpoint).host;
+        } catch {
+          return "?";
+        }
+      })(),
       teams: String((s.prefs as Record<string, string> | null)?.teams ?? "").split(",").filter(Boolean).length,
       morning: s.morning,
       lastMorning: s.last_morning,

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
-import { supa, sendPush } from "@/lib/server/push";
+import { supa, sendPush, lastPushError } from "@/lib/server/push";
 import { isMorning, localDate, morningSummary } from "@/lib/server/morning";
 import { eventState, liveAlerts, f1Alerts } from "@/lib/server/live";
 import { getJson } from "@/lib/server/http";
@@ -43,6 +43,8 @@ async function run(req: NextRequest) {
   if (error) return NextResponse.json({ ok: false, step: "reminders", error: error.message }, { status: 500 });
 
   let sent = 0;
+  const failures: string[] = [];
+  const t0 = Date.now();
   for (const r of due ?? []) {
     const { data: s } = await db.from("push_subs").select("sub").eq("endpoint", r.endpoint).maybeSingle();
     if (!s) {
@@ -58,6 +60,7 @@ async function run(req: NextRequest) {
       continue;
     }
     if (res === "ok") sent++;
+    else failures.push(lastPushError ?? res);
     await db.from("reminders").update({ sent: true }).eq("id", r.id);
   }
 
@@ -86,6 +89,7 @@ async function run(req: NextRequest) {
       for (const al of alerts) {
         const r = await sendPush(subRow.sub, al);
         if (r === "ok") live++;
+        else failures.push(lastPushError ?? r);
       }
       if (JSON.stringify(prev) !== JSON.stringify(mine)) await db.from("reminders").update({ last_state: mine }).eq("id", f.id);
     }
@@ -142,5 +146,8 @@ async function run(req: NextRequest) {
     if (r === "ok") mornings++;
   }
 
-  return NextResponse.json({ ok: true, due: due?.length ?? 0, sent, live, mornings, liveError: fErr?.message });
+  const summary = { at: new Date().toISOString(), ms: Date.now() - t0, due: due?.length ?? 0, sent, live, mornings, followedLive: follows?.length ?? 0, failures: failures.slice(0, 5), liveError: fErr?.message ?? null };
+  // Latido: última ejecución (visible en /api/status).
+  await db.from("fl_results").upsert({ event_key: "__cron", value: summary });
+  return NextResponse.json({ ok: true, ...summary });
 }

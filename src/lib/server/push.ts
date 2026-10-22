@@ -45,16 +45,24 @@ export interface PushPayload {
     | "test";
 }
 
+// Último error de envío (para diagnóstico).
+export let lastPushError: string | null = null;
+
 // Devuelve "gone" si la suscripción ya no existe (el teléfono la anuló).
 export async function sendPush(sub: webpush.PushSubscription, payload: PushPayload): Promise<"ok" | "gone" | "error"> {
-  if (!ensureVapid()) return "error";
+  if (!ensureVapid()) {
+    lastPushError = "vapid keys missing";
+    return "error";
+  }
   try {
-    await webpush.sendNotification(sub, JSON.stringify(payload), { TTL: 900 });
+    // Urgencia alta: Android entrega el aviso al instante aunque el teléfono esté en reposo.
+    await webpush.sendNotification(sub, JSON.stringify(payload), { TTL: 900, urgency: "high" });
     return "ok";
   } catch (e: unknown) {
-    const code = (e as { statusCode?: number }).statusCode;
-    if (code === 404 || code === 410) return "gone";
-    console.warn("[push] error", code);
+    const err = e as { statusCode?: number; body?: string; message?: string };
+    lastPushError = `${err.statusCode ?? ""} ${String(err.body ?? err.message ?? "").slice(0, 200)}`;
+    if (err.statusCode === 404 || err.statusCode === 410) return "gone";
+    console.warn("[push] error", lastPushError);
     return "error";
   }
 }
