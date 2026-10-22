@@ -194,7 +194,7 @@ export async function leagueState(code: string, token?: string) {
       if (s > 0) hits++;
     }
     const w = wallet(m.id, bets ?? [], results);
-    return { name: m.name, points, scored, accuracy: scored ? hits / scored : null, coins: w.balance, pending: w.pending, isMe: me?.id === m.id };
+    return { name: m.name, points, scored, accuracy: scored ? hits / scored : null, coins: w.balance, pending: w.pending, rescues: w.rescues, isMe: me?.id === m.id };
   });
   table.sort((a, b) => b.points - a.points || (b.accuracy ?? 0) - (a.accuracy ?? 0));
 
@@ -274,7 +274,7 @@ export async function leagueState(code: string, token?: string) {
       currentRound,
       rounds,
       champion: finished ? table.filter((r) => r.points === table[0]?.points && r.points > 0).map((r) => r.name) : [],
-      coinChampion: finished ? [...table].sort((a, b) => b.coins - a.coins)[0]?.name ?? null : null,
+      coinChampion: finished ? [...table].sort((a, b) => b.coins - a.coins || a.rescues - b.rescues)[0]?.name ?? null : null,
     },
     me: me
       ? { isOwner: members?.[0]?.id === me.id, name: me.name, coins: myWallet?.balance ?? START_COINS, available: myWallet?.available ?? START_COINS, pending: myWallet?.pending ?? 0 }
@@ -289,11 +289,16 @@ export async function leagueState(code: string, token?: string) {
 
 export const outcome = (r: { h: number; a: number }) => (r.h > r.a ? "H" : r.h < r.a ? "A" : "D");
 
-// Fichas: 1000 al empezar; se gana apuesta × cuota, se pierde la apuesta.
+// Fichas, como en un casino: 1000 al empezar; si aciertas cobras apuesta × cuota, si fallas pierdes lo apostado.
+// Rescate: si tras perder te quedan menos de 100 fichas, recibes lo necesario para volver a 100
+// (así nunca te quedas sin poder jugar). Los rescates se cuentan y se muestran en la tabla.
+export const RESCUE = 100;
 export function wallet(memberId: string, bets: any[], results: Map<string, any>) {
   let balance = START_COINS;
   let pending = 0;
-  for (const b of bets.filter((x) => x.member_id === memberId)) {
+  let rescues = 0;
+  const mine = bets.filter((x) => x.member_id === memberId).sort((a, b) => String(a.start_at).localeCompare(String(b.start_at)));
+  for (const b of mine) {
     const r = results.get(b.event_key);
     if (!r) {
       // Partido aplazado o sin resultado 3 días después: apuesta anulada y fichas devueltas.
@@ -303,8 +308,12 @@ export function wallet(memberId: string, bets: any[], results: Map<string, any>)
     }
     if (isVoid(r)) continue; // partido anulado: se devuelven las fichas
     balance += outcome(r) === b.pick ? Math.round(b.stake * Number(b.odds)) - b.stake : -b.stake;
+    if (balance < RESCUE) {
+      rescues++;
+      balance = RESCUE;
+    }
   }
-  return { balance, pending, available: balance - pending };
+  return { balance, pending, available: Math.max(0, balance - pending), rescues };
 }
 
 export async function memberWallet(memberId: string) {

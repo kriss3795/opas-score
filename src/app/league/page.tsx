@@ -342,8 +342,10 @@ function LeagueView({ code, token }: { code: string; token: string }) {
               {st.me.pending > 0 && ` · ${st.me.pending} ${fr ? "en jeu" : "en juego"}`}
             </span>
           </span>
-          <span className="max-w-36 text-right text-[11px] leading-tight text-muted">
-            {fr ? "Jetons virtuels, sans argent réel. Cotes : ClubElo." : "Fichas virtuales, sin dinero real. Cuotas: ClubElo."}
+          <span className="max-w-40 text-right text-[11px] leading-tight text-muted">
+            {fr
+              ? "Gagné : mise × cote. Perdu : la mise. Sous 100 jetons, un sauvetage 🛟 te remet à 100. Jetons virtuels, cotes ClubElo."
+              : "Si aciertas: apuesta × cuota. Si fallas: pierdes lo apostado. Bajo 100 fichas, un rescate 🛟 te deja en 100. Fichas virtuales, cuotas ClubElo."}
           </span>
         </section>
       )}
@@ -524,6 +526,9 @@ function ScorePredict({
       <div className="mb-3 text-xs font-semibold text-muted">
         {leagueMeta(e.key.split("|")[1])?.name[lang] ?? e.competition} · {fmtDay(e.start, lang)} {fmtTime(e.start, lang)}
       </div>
+      <div className="mb-2 text-xs font-bold tracking-wider text-muted uppercase">
+        🎯 {lang === "fr" ? "Pronostic du score (gratuit, donne des points)" : "Pronóstico del marcador (gratis, suma puntos)"}
+      </div>
       <div className="grid grid-cols-[1fr_auto] items-center gap-y-3">
         <span className="flex items-center gap-2 leading-tight font-semibold">
           <TeamLogo src={e.home?.logo} name={e.home?.name ?? ""} size={24} /> {e.home?.name}
@@ -542,17 +547,28 @@ function ScorePredict({
         }}
         className={`mt-3 w-full rounded-xl py-2.5 font-bold ${state === "saved" ? "bg-football/20 text-football" : "bg-brand text-white"}`}
       >
-        {state === "saved" ? (lang === "fr" ? "✓ Enregistré" : "✓ Guardado") : state === "error" ? (lang === "fr" ? "Trop tard ou erreur" : "Muy tarde o error") : lang === "fr" ? "Valider" : "Guardar"}
+        {state === "saved" ? (lang === "fr" ? "✓ Pronostic enregistré" : "✓ Pronóstico guardado") : state === "error" ? (lang === "fr" ? "Trop tard ou erreur" : "Muy tarde o error") : lang === "fr" ? "Enregistrer le pronostic" : "Guardar pronóstico"}
       </button>
-      {e.odds && <BetPanel e={e} code={code} token={token} bet={bet} available={available} onSaved={onSaved} />}
+      {e.odds ? (
+        <BetPanel e={e} code={code} token={token} bet={bet} available={available} onSaved={onSaved} suggested={h > a ? "H" : h < a ? "A" : "D"} />
+      ) : (
+        <p className="mt-3 border-t border-line pt-3 text-xs text-muted">
+          🪙{" "}
+          {lang === "fr"
+            ? "Pas de paris en jetons pour ce match : la source (ClubElo) ne publie pas de cotes. Le pronostic compte quand même."
+            : "Sin apuestas con fichas en este partido: la fuente (ClubElo) no publica cuotas. El pronóstico sí cuenta."}
+        </p>
+      )}
     </div>
   );
 }
 
-function BetPanel({ e, code, token, bet, available, onSaved }: { e: any; code: string; token: string; bet?: any; available: number; onSaved: () => void }) {
+function BetPanel({ e, code, token, bet, available, onSaved, suggested }: { e: any; code: string; token: string; bet?: any; available: number; onSaved: () => void; suggested?: "H" | "D" | "A" }) {
   const { lang } = useApp();
   const fr = lang === "fr";
   const [pick, setPick] = useState<"H" | "D" | "A" | null>(bet?.pick ?? null);
+  // Si aún no eligió, se propone el resultado de su pronóstico (puede cambiarlo).
+  const shown = pick ?? (suggested && suggested !== "D" ? suggested : null);
   const [stake, setStake] = useState<number>(bet?.stake ?? 50);
   const [msg, setMsg] = useState(bet ? (fr ? "✓ Pari placé" : "✓ Apuesta hecha") : "");
   const max = available + (bet?.stake ?? 0);
@@ -562,6 +578,7 @@ function BetPanel({ e, code, token, bet, available, onSaved }: { e: any; code: s
     ["A", e.away?.name ?? "2"],
   ];
   const place = async () => {
+    const pick = shown;
     if (!pick) return;
     const r = await fetch("/api/league", {
       method: "POST",
@@ -592,19 +609,29 @@ function BetPanel({ e, code, token, bet, available, onSaved }: { e: any; code: s
   };
   return (
     <div className="mt-4 border-t border-line pt-3">
-      <div className="mb-2 text-xs font-bold tracking-wider text-muted uppercase">🪙 {fr ? "Parier des jetons" : "Apostar fichas"}</div>
+      <div className="mb-2 text-xs font-bold tracking-wider text-muted uppercase">🪙 {fr ? "Parier des jetons (en plus du pronostic)" : "Apostar fichas (además del pronóstico)"}</div>
+      {/* Cada opción muestra su probabilidad real y cuánto cobra con la apuesta elegida. */}
       <div className="grid grid-cols-3 gap-2">
         {opts.map(([k, l]) => (
           <button
             key={k}
             onClick={() => (setPick(k), setMsg(""))}
-            className={`rounded-xl px-2 py-2 text-center ${pick === k ? "bg-gold text-black" : "bg-card2"}`}
+            className={`rounded-xl px-2 py-2 text-center ${shown === k ? "bg-gold text-black" : "bg-card2"}`}
           >
             <span className="block truncate text-xs font-semibold opacity-80">{l}</span>
-            <span className="font-score text-xl font-extrabold">{e.odds[k].toFixed(2)}</span>
+            <span className="font-score block text-xl leading-tight font-extrabold">×{e.odds[k].toFixed(2)}</span>
+            {e.probs && <span className="block text-[11px] opacity-70">{Math.round(e.probs[k] * 100)} %</span>}
+            <span className="mt-1 block text-[11px] leading-tight font-semibold">
+              {stake} → <b>{Math.round(stake * e.odds[k])}</b>
+            </span>
           </button>
         ))}
       </div>
+      <p className="mt-1.5 text-[11px] leading-snug text-muted">
+        {fr
+          ? `Si tu gagnes, tu reçois mise × cote (bénéfice : ${shown ? Math.round(stake * e.odds[shown]) - stake : "…"}). Si tu perds, tu perds la mise. Moins probable = paie plus.`
+          : `Si aciertas, recibes apuesta × cuota (ganancia: ${shown ? Math.round(stake * e.odds[shown]) - stake : "…"}). Si fallas, pierdes lo apostado. Menos probable = paga más.`}
+      </p>
       <div className="mt-2 flex items-center gap-2">
         {[10, 50, 100, 250].map((v) => (
           <button key={v} onClick={() => (setStake(Math.min(v, max)), setMsg(""))} className={`flex-1 rounded-lg py-1.5 text-sm font-bold ${stake === v ? "bg-text text-bg" : "bg-card2 text-muted"}`}>
@@ -616,11 +643,15 @@ function BetPanel({ e, code, token, bet, available, onSaved }: { e: any; code: s
         </button>
       </div>
       <button
-        disabled={!pick || stake < 1 || stake > max}
+        disabled={!shown || stake < 1 || stake > max}
         onClick={place}
         className="mt-2 w-full rounded-xl bg-gold py-2.5 font-extrabold text-black disabled:opacity-40"
       >
-        {pick ? `${fr ? "Parier" : "Apostar"} ${stake} → ${fr ? "gain possible" : "ganancia posible"} ${Math.round(stake * e.odds[pick])}` : fr ? "Choisis un résultat" : "Elige un resultado"}
+        {shown
+          ? `${fr ? "Parier" : "Apostar"} ${stake} ${fr ? "sur" : "a"} ${opts.find((o) => o[0] === shown)?.[1]} → ${fr ? "tu reçois" : "recibes"} ${Math.round(stake * e.odds[shown])}`
+          : fr
+            ? "Choisis un résultat"
+            : "Elige un resultado"}
       </button>
       {msg && <p className="mt-1.5 text-center text-xs text-muted">{msg}</p>}
     </div>
@@ -631,7 +662,7 @@ function LeagueTable({ rows }: { rows: any[] }) {
   const { lang } = useApp();
   const fr = lang === "fr";
   const [by, setBy] = useState<"points" | "coins">("points");
-  const cmp = (a: any, b: any) => (by === "points" ? b.points - a.points || (b.accuracy ?? 0) - (a.accuracy ?? 0) : b.coins - a.coins);
+  const cmp = (a: any, b: any) => (by === "points" ? b.points - a.points || (b.accuracy ?? 0) - (a.accuracy ?? 0) : b.coins - a.coins || (a.rescues ?? 0) - (b.rescues ?? 0));
   const sorted = [...rows].sort(cmp);
   // Empate exacto = misma posición (y misma medalla).
   const place = (r: any) => 1 + sorted.filter((o) => cmp(o, r) < 0).length;
@@ -663,7 +694,10 @@ function LeagueTable({ rows }: { rows: any[] }) {
                 <span className="font-score w-10 text-right text-2xl font-extrabold">{r.points}</span>
               </>
             ) : (
-              <span className="font-score text-2xl font-extrabold text-gold">{r.coins}</span>
+              <span className="text-right">
+                <span className="font-score block text-2xl leading-none font-extrabold text-gold">{r.coins}</span>
+                {r.rescues > 0 && <span className="text-[11px] text-muted">🛟×{r.rescues}</span>}
+              </span>
             )}
           </div>
         ))}
