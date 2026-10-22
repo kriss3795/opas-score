@@ -19,7 +19,7 @@ function ensureVapid() {
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
   const priv = process.env.VAPID_PRIVATE_KEY?.trim();
   if (!pub || !priv) return false;
-  webpush.setVapidDetails("mailto:opas-score@example.com", pub, priv);
+  webpush.setVapidDetails("https://opas-score.vercel.app", pub, priv);
   vapidReady = true;
   return true;
 }

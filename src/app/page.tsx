@@ -44,9 +44,10 @@ export default function Home() {
       g.items.push(e);
     }
     // Favoritos primero dentro de cada día, respetando la hora.
-    const followed = events.filter((e) => prefs.important.includes(e.id) && e.status !== "post");
-    const fset = new Set(followed.map((e) => e.id));
-    return { followed, live: live.filter((e) => !fset.has(e.id)), byDay: byDay.map((g) => ({ ...g, items: g.items.filter((e) => !fset.has(e.id)) })).filter((g) => g.items.length), recent };
+    const isFollowed = (e: SportEvent) => prefs.important.includes(`${e.sport}:${e.id}`) || prefs.important.includes(e.id);
+    const followed = events.filter((e) => isFollowed(e) && e.status !== "post");
+    const fset = new Set(followed.map((e) => `${e.sport}:${e.id}`));
+    return { followed, live: live.filter((e) => !fset.has(`${e.sport}:${e.id}`)), byDay: byDay.map((g) => ({ ...g, items: g.items.filter((e) => !fset.has(`${e.sport}:${e.id}`)) })).filter((g) => g.items.length), recent };
   }, [events, lang, prefs.important]);
 
   return (
@@ -81,7 +82,7 @@ export default function Home() {
           {groups.followed.length > 0 && (
             <Section title={`⭐ ${t("followed")}`}>
               {groups.followed.map((e) => (
-                <EventCard key={`f-${e.id}`} e={e} favIds={favIds} />
+                <EventCard key={`f-${e.sport}-${e.id}`} e={e} favIds={favIds} />
               ))}
             </Section>
           )}
@@ -89,7 +90,7 @@ export default function Home() {
           {groups.live.length > 0 && (
             <Section title={t("live")} live>
               {groups.live.map((e) => (
-                <EventCard key={e.id} e={e} favIds={favIds} />
+                <EventCard key={`${e.sport}-${e.id}`} e={e} favIds={favIds} />
               ))}
             </Section>
           )}
@@ -97,19 +98,19 @@ export default function Home() {
           {groups.byDay.map((g) => (
             <Section key={g.key} title={g.label}>
               {g.items.map((e) => (
-                <EventCard key={e.id} e={e} favIds={favIds} />
+                <EventCard key={`${e.sport}-${e.id}`} e={e} favIds={favIds} />
               ))}
             </Section>
           ))}
 
-          {groups.live.length === 0 && groups.byDay.length === 0 && (
+          {groups.followed.length === 0 && groups.live.length === 0 && groups.byDay.length === 0 && (
             <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">{t("nothing")}</p>
           )}
 
           {groups.recent.length > 0 && (
             <Section title={t("recent")}>
               {groups.recent.map((e) => (
-                <EventCard key={e.id} e={e} favIds={favIds} />
+                <EventCard key={`${e.sport}-${e.id}`} e={e} favIds={favIds} />
               ))}
             </Section>
           )}

@@ -295,7 +295,14 @@ function TeamPicker({
       const chosenHere = leagues.filter((l) => LEAGUES.find((x) => x.id === l)?.sport === sp);
       return chosenHere.length ? tm.leagues.some((l) => chosenHere.includes(l)) : true;
     });
-    return fromChosen.slice(0, 200);
+    // Hasta 80 por deporte, para que ningún deporte quede fuera de la lista.
+    const perSport = new Map<string, number>();
+    return fromChosen.filter((tm) => {
+      const sp = tm.sport ?? "football";
+      const c = perSport.get(sp) ?? 0;
+      perSport.set(sp, c + 1);
+      return c < 80;
+    });
   }, [pool, q, leagues]);
 
   const isOn = (tm: TeamOption) => selected.some((x) => x.id === tm.id && (x.sport ?? "football") === (tm.sport ?? "football"));
@@ -441,8 +448,10 @@ function AthletePicker({ selected, sports, onToggle }: { selected: AthleteOption
   const [q, setQ] = useState("");
   const [res, setRes] = useState<AthleteOption[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const sportsKey = sports.join(",");
 
   useEffect(() => {
+    const allowed = sportsKey.split(",");
     const query = q.trim();
     if (query.length < 3) {
       setRes(null);
@@ -452,12 +461,13 @@ function AthletePicker({ selected, sports, onToggle }: { selected: AthleteOption
     const id = setTimeout(() => {
       fetch(`/api/athletes?q=${encodeURIComponent(query)}`)
         .then((r) => r.json())
-        .then((d) => setRes((d.athletes ?? []).filter((a: AthleteOption) => sports.includes(a.sport))))
+        .then((d) => setRes((d.athletes ?? []).filter((a: AthleteOption) => allowed.includes(a.sport))))
         .catch(() => setRes([]))
         .finally(() => setBusy(false));
     }, 350);
     return () => clearTimeout(id);
-  }, [q, sports]);
+    // sportsKey (texto) en vez del arreglo: evita repetir la búsqueda en cada render.
+  }, [q, sportsKey]);
 
   return (
     <section>

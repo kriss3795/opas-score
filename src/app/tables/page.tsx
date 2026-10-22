@@ -43,6 +43,8 @@ export default function TablesPage() {
     [prefs.teams],
   );
   const sport = leagueMeta(sel ?? "")?.sport ?? "football";
+  // NBA, NFL y MLB se ordenan por victorias (no hay puntos).
+  const byWins = ["basketball", "nfl", "baseball"].includes(sport);
   const favNames = useMemo(() => new Set(prefs.teams.map((x) => x.name)), [prefs.teams]);
 
   useEffect(() => {
@@ -85,8 +87,8 @@ export default function TablesPage() {
                 <span className="w-6 text-center">#</span>
                 <span className="flex-1">{leagueMeta(data.competitionId)?.name[lang]}</span>
                 <span className="w-7 text-center">{t("played")}</span>
-                <span className="w-9 text-center">{sport === "basketball" ? (lang === "fr" ? "D" : "P") : t("diff")}</span>
-                <span className="w-9 text-center">{sport === "basketball" ? (lang === "fr" ? "V" : "G") : t("points")}</span>
+                <span className="w-9 text-center">{byWins ? (lang === "fr" ? "D" : "P") : t("diff")}</span>
+                <span className="w-9 text-center">{byWins ? (lang === "fr" ? "V" : "G") : t("points")}</span>
               </div>
               {data.rows.map((r) => {
                 const isFav = (r.teamId && fav.has(`${sport}:${r.teamId}`)) || favNames.has(r.name);
@@ -101,7 +103,7 @@ export default function TablesPage() {
                     <span className={`min-w-0 flex-1 leading-tight break-words ${isFav ? "font-extrabold" : "font-medium"}`}>{r.name}</span>
                     <span className="w-7 text-center text-sm text-muted">{r.played ?? ""}</span>
                     <span className="w-9 text-center text-sm text-muted">
-                      {sport === "basketball" ? r.lost ?? "" : r.diff === undefined ? "" : r.diff > 0 ? `+${r.diff}` : r.diff}
+                      {byWins ? r.lost ?? "" : r.diff === undefined ? "" : r.diff > 0 ? `+${r.diff}` : r.diff}
                     </span>
                     <span className="font-score w-9 text-center text-xl font-extrabold">{r.points}</span>
                   </div>

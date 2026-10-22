@@ -35,23 +35,11 @@ function shortName(team: any): string | undefined {
   return team?.name && team.name.length <= 16 ? team.name : s ?? team?.abbreviation;
 }
 
-// ESPN no siempre acepta rangos de fechas en fútbol: se intenta una vez y, si falla,
-// se piden los días uno por uno (cada día con su propia caché).
-let rangeWorks: boolean | null = null;
-
+// ESPN no acepta rangos de fechas de forma fiable: se pide día por día (cada día con su propia caché).
 export async function teamScoreboard(league: string, from: Date, to: Date): Promise<SportEvent[] | null> {
   const meta = leagueMeta(league);
   if (!meta) return null;
   const path = meta.path;
-  if (rangeWorks !== false) {
-    const url = `${SITE}/${path}/scoreboard?dates=${ymd(from)}-${ymd(to)}&limit=300`;
-    const data = await getJson<any>(url, 60);
-    if (data?.events) {
-      rangeWorks = true;
-      return parseScoreboard(league, data);
-    }
-    if (rangeWorks === null) rangeWorks = false;
-  }
   const today = ymd(new Date());
   const days: Date[] = [];
   for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86400000)) days.push(d);

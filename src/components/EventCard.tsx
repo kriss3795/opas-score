@@ -49,12 +49,27 @@ function eventName(e: SportEvent, t: (k: Key) => string) {
   return e.title ?? e.competitionName;
 }
 
+// Rondas de tenis: la fuente las publica en inglés.
+function roundLabel(r: string, lang: "fr" | "es") {
+  const fr = lang === "fr";
+  const m = r.match(/round (\d+)/i);
+  if (/qualif/i.test(r)) return fr ? "Qualifications" : "Clasificación";
+  if (/semi/i.test(r)) return fr ? "Demi-finale" : "Semifinal";
+  if (/quarter/i.test(r)) return fr ? "Quart de finale" : "Cuartos de final";
+  if (/round of 16/i.test(r)) return fr ? "Huitième de finale" : "Octavos de final";
+  if (/^final$/i.test(r.trim())) return fr ? "Finale" : "Final";
+  if (m) return fr ? `${m[1]}${m[1] === "1" ? "er" : "e"} tour` : `${m[1]}.ª ronda`;
+  return r;
+}
+
 export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<string> }) {
   const { t, lang, prefs, update } = useApp();
   const meta = sportMeta(e.sport);
   const league = leagueMeta(e.competitionId);
   const tv = isInFrance() ? (e.sport === "f1" ? F1_TV_FR : league?.tvFR) : undefined;
-  const important = prefs.important.includes(e.id);
+  // Clave única del evento (los ids de la fuente se repiten entre deportes).
+  const key = `${e.sport}:${e.id}`;
+  const important = prefs.important.includes(key) || prefs.important.includes(e.id);
   const [busy, setBusy] = useState(false);
 
   // Animación sutil cuando cambia el marcador.
@@ -62,7 +77,11 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
   const [flash, setFlash] = useState(false);
   useEffect(() => {
     const now = `${e.home?.score}-${e.away?.score}`;
-    if (prev.current !== now && e.status === "in") {
+    const total = (x: string) => x.split("-").reduce((a, b) => a + (Number(b) || 0), 0);
+    const wasNumeric = /^\d+-\d+$/.test(prev.current);
+    // Solo deportes de pocos tantos (en NBA o NFL el marcador cambia sin parar).
+    const lowScoring = ["football", "rugby", "hockey", "afl"].includes(e.sport);
+    if (lowScoring && wasNumeric && total(now) > total(prev.current) && e.status === "in") {
       setFlash(true);
       if (important || fav(e.home) || fav(e.away)) playSound(e.sport === "football" ? "goal" : "reminder");
       const id = setTimeout(() => setFlash(false), 2500);
@@ -90,9 +109,22 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
         sub = await currentSubscription();
       }
       const name = eventName(e, t);
-      const body = lang === "fr" ? `Dans 15 minutes${tv ? ` sur ${tv}` : ""} : ${name}` : `En 15 minutos${tv ? ` por ${tv}` : ""}: ${name}`;
-      const ok = await setReminder({ on: !important, eventId: e.id, start: e.start, title: `${meta.emoji} Opa's Score`, body, url: e.link ?? "/", league: e.home ? e.competitionId : undefined });
-      if (ok) update((p) => ({ important: important ? p.important.filter((x) => x !== e.id) : [...p.important, e.id] }));
+      // {min} lo reemplaza el servidor por los minutos que realmente faltan.
+      const body = lang === "fr" ? `Dans {min} min${tv ? ` sur ${tv}` : ""} : ${name}` : `En {min} min${tv ? ` por ${tv}` : ""}: ${name}`;
+      const teamSport = sportMeta(e.sport).kind === "team";
+      const ok = await setReminder({
+        on: !important,
+        eventId: e.id,
+        start: e.start,
+        title: `${meta.emoji} Opa's Score`,
+        body,
+        url: e.link ?? "/",
+        league: teamSport ? e.competitionId : undefined,
+      });
+      if (ok)
+        update((p) => ({
+          important: important ? p.important.filter((x) => x !== key && x !== e.id) : [...p.important, key],
+        }));
     } finally {
       setBusy(false);
     }
@@ -107,7 +139,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
     e.sport === "f1"
       ? meta.name[lang]
       : e.sport === "tennis"
-        ? `${e.competitionName}${e.round ? ` · ${e.round}` : ""}`
+        ? `${e.competitionName}${e.round ? ` · ${roundLabel(e.round, lang)}` : ""}`
         : league?.name[lang] ?? e.competitionName;
 
   const body = (

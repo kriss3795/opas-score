@@ -33,7 +33,7 @@ async function run(req: NextRequest) {
 
   const { data: due, error } = await db
     .from("reminders")
-    .select("id, endpoint, title, body, url, event_id")
+    .select("id, endpoint, title, body, url, event_id, start_at")
     .eq("sent", false)
     .lte("start_at", until)
     .gte("start_at", since)
@@ -47,7 +47,9 @@ async function run(req: NextRequest) {
       await db.from("reminders").delete().eq("id", r.id);
       continue;
     }
-    const res = await sendPush(s.sub, { title: r.title, body: r.body, url: r.url, tag: r.event_id, kind: "reminder" });
+    const minutes = Math.max(1, Math.round((new Date(r.start_at).getTime() - now) / 60000));
+    const body = String(r.body ?? "").replace("{min}", String(minutes));
+    const res = await sendPush(s.sub, { title: r.title, body, url: r.url, tag: r.event_id, kind: "reminder" });
     if (res === "gone") {
       await db.from("push_subs").delete().eq("endpoint", r.endpoint);
       await db.from("reminders").delete().eq("endpoint", r.endpoint);
