@@ -40,8 +40,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (!ready) return <div className="min-h-dvh bg-bg" />;
   // Los amigos que llegan con un enlace de invitación entran directo a la liga.
   if (!prefs.welcomed && path.startsWith("/league")) return <div className="mx-auto min-h-dvh max-w-xl">{children}</div>;
-  if (!prefs.welcomed) return <Welcome />;
+  if (!prefs.welcomed && path !== "/install") return <Welcome />;
   if (!prefs.onboarded && path !== "/install") return <Onboarding />;
+  if (path === "/install" && !prefs.onboarded) return <div className="mx-auto min-h-dvh max-w-xl">{children}</div>;
 
   const tabs = [
     { href: "/", label: t("tabProgramme"), icon: IconCalendar, show: true },

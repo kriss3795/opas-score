@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 const RACE_MAX = 25; // puntos al ganador de un Gran Premio
 const SPRINT_MAX = 8; // puntos al ganador de un sprint
 
-export async function GET() {
+export async function GET(req: Request) {
+  const favDrivers = (new URL(req.url).searchParams.get("drivers") ?? "").split(",").filter(Boolean).slice(0, 10);
   const [cal, drivers, constructors, last] = await Promise.all([
     f1Calendar(),
     f1DriverStandings(),
@@ -56,7 +57,7 @@ export async function GET() {
   let facts: ReturnType<typeof f1Facts> = [];
   if (current?.circuitId) {
     const winners = await f1CircuitWinners(current.circuitId);
-    if (winners) facts = f1Facts(winners, current.circuit, current.url ?? `https://api.jolpi.ca/ergast/f1/circuits/${current.circuitId}/results/1.json`);
+    if (winners) facts = f1Facts(winners, current.circuit, current.url ?? `https://api.jolpi.ca/ergast/f1/circuits/${current.circuitId}/results/1.json`, favDrivers);
   }
 
   // Calculadora de campeonato con datos reales.

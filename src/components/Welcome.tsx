@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useApp } from "@/lib/client/store";
+import { isStandalone, platform } from "@/lib/client/push";
 
 // Pantalla de bienvenida: solo la primera vez.
 export default function Welcome() {
@@ -40,7 +41,11 @@ export default function Welcome() {
       </div>
 
       <button
-        onClick={() => update({ welcomed: true, lang: prefs.lang })}
+        onClick={() => {
+          update({ welcomed: true, lang: prefs.lang });
+          // Primero instalar: así la configuración se hace una sola vez, dentro de la app instalada.
+          if (platform() !== "desktop" && !isStandalone()) window.location.assign("/install");
+        }}
         className="rise relative mb-6 w-full max-w-sm rounded-2xl bg-brand py-4 text-lg font-extrabold text-white shadow-lg shadow-brand/30 active:scale-[0.98]"
         style={{ animationDelay: "0.8s" }}
       >

@@ -19,7 +19,10 @@ export default function Home() {
     setShowInstall(!isStandalone() && platform() !== "desktop");
   }, []);
 
-  const favIds = useMemo(() => new Set(prefs.teams.map((x) => `${x.sport ?? "football"}:${x.id}`)), [prefs.teams]);
+  const favIds = useMemo(
+    () => new Set(prefs.teams.flatMap((x) => [x.id, ...(x.alt ?? [])].map((id) => `${x.sport ?? "football"}:${id}`))),
+    [prefs.teams],
+  );
 
   const groups = useMemo(() => {
     if (!events) return null;

@@ -28,11 +28,12 @@ export default function GPPage() {
   const [d, setD] = useState<any>(undefined);
   const favDrivers = new Set(prefs.drivers.map((x) => x.id));
   const favNames = new Set(prefs.drivers.map((x) => x.name));
+  const driversParam = prefs.drivers.map((x) => x.name).join(",");
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const load = () =>
-      fetch("/api/f1/gp")
+      fetch(`/api/f1/gp?drivers=${encodeURIComponent(driversParam)}`)
         .then((r) => r.json())
         .then((x) => {
           setD(x);
@@ -45,7 +46,7 @@ export default function GPPage() {
         });
     load();
     return () => clearTimeout(timer);
-  }, []);
+  }, [driversParam]);
 
   if (!prefs.sports.includes("f1"))
     return <p className="pt-safe m-4 mt-12 rounded-2xl bg-card px-5 py-8 text-center text-muted">{t("noF1")}</p>;

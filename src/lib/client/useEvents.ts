@@ -11,10 +11,16 @@ export function agendaParams(prefs: Prefs) {
   const on = (sp: string) => prefs.sports.includes(sp as never);
   const leagues = prefs.leagues.filter((l) => on(leagueMeta(l)?.sport ?? "football"));
   const teams = prefs.teams.filter((t) => on(t.sport ?? "football"));
+  const athletes = (prefs.athletes ?? []).filter((a) => on(a.sport) && a.teamId);
   if (leagues.length) p.set("leagues", leagues.join(","));
-  if (teams.length) {
-    p.set("teams", teams.map((t) => `${t.sport ?? "football"}:${t.id}`).join(","));
-    p.set("teamLeagues", Array.from(new Set(teams.flatMap((t) => t.leagues))).join(","));
+  const teamKeys = [
+    ...teams.flatMap((t) => [t.id, ...(t.alt ?? [])].map((id) => `${t.sport ?? "football"}:${id}`)),
+    ...athletes.map((a) => `${a.sport}:${a.teamId}`),
+  ];
+  const teamLeagues = [...teams.flatMap((t) => t.leagues), ...athletes.map((a) => a.league ?? "").filter(Boolean)];
+  if (teamKeys.length) {
+    p.set("teams", Array.from(new Set(teamKeys)).join(","));
+    p.set("teamLeagues", Array.from(new Set(teamLeagues)).join(","));
   }
   if (on("f1")) p.set("f1", "1");
   const players = on("tennis") ? prefs.players ?? [] : [];

@@ -38,7 +38,10 @@ export default function TablesPage() {
   }, [prefs.leagues, prefs.teams, prefs.sports]);
   const [sel, setSel] = useState(options[0]?.id);
   const [data, setData] = useState<Standings | null | undefined>(undefined);
-  const fav = useMemo(() => new Set(prefs.teams.map((x) => `${x.sport ?? "football"}:${x.id}`)), [prefs.teams]);
+  const fav = useMemo(
+    () => new Set(prefs.teams.flatMap((x) => [x.id, ...(x.alt ?? [])].map((id) => `${x.sport ?? "football"}:${id}`))),
+    [prefs.teams],
+  );
   const sport = leagueMeta(sel ?? "")?.sport ?? "football";
   const favNames = useMemo(() => new Set(prefs.teams.map((x) => x.name)), [prefs.teams]);
 

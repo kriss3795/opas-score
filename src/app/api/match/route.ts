@@ -102,8 +102,24 @@ export async function GET(req: NextRequest) {
 
   const meta = leagueMeta(league)!;
   const sourceUrl = `https://www.espn.com/${meta.path.split("/")[0]}/match/_/gameId/${id}`;
+  // Líderes de la temporada de cada equipo (goles, asistencias), tal como los publica la fuente.
+  const leaders: { team: string; category: string; name: string; value: string }[] = [];
+  for (const blk of d.leaders ?? []) {
+    const tid = String(blk.team?.id ?? "");
+    const tname = tid === home?.id ? home?.name : tid === away?.id ? away?.name : blk.team?.displayName;
+    for (const cat of blk.leaders ?? []) {
+      const top = cat.leaders?.[0];
+      const name = top?.athlete?.displayName;
+      if (!tname || !name) continue;
+      leaders.push({ team: tname, category: String(cat.name ?? cat.displayName ?? ""), name, value: String(top.displayValue ?? top.value ?? "").split(" ")[0] });
+    }
+  }
+  const followed = (req.nextUrl.searchParams.get("players") ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 20);
+  const scorersToday = keyEvents.filter((k: any) => k.icon === "goal" && k.player).map((k: any) => k.player as string);
   const facts =
-    home && away ? footballFacts({ home: home.name, away: away.name, h2h: h2hUnique, form, url: sourceUrl }) : [];
+    home && away
+      ? footballFacts({ home: home.name, away: away.name, h2h: h2hUnique, form, leaders, followed, scorersToday, url: sourceUrl })
+      : [];
 
   // Pronóstico ClubElo (solo fútbol, solo si el partido coincide sin ambigüedad).
   let elo = null;

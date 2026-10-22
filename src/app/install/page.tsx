@@ -14,7 +14,7 @@ interface BIPEvent extends Event {
 
 // Instalación guiada: detecta el teléfono y muestra los pasos correctos.
 export default function InstallPage() {
-  const { t, prefs } = useApp();
+  const { t, prefs, lang } = useApp();
   const [p, setP] = useState<Platform>("desktop");
   const [installed, setInstalled] = useState(false);
   const [bip, setBip] = useState<BIPEvent | null>(null);
@@ -47,6 +47,13 @@ export default function InstallPage() {
         <Image src="/logo.png" alt="Opa's Score" width={900} height={742} className="w-44" />
       </div>
       <h1 className="mt-4 text-center text-2xl font-extrabold">{t("installTitle")}</h1>
+      {!prefs.onboarded && !installed && (
+        <p className="mt-3 text-center text-muted">
+          {lang === "fr"
+            ? "Installe-la d'abord : tu choisiras ensuite tes sports directement dans l'app installée."
+            : "Instálala primero: después eliges tus deportes directamente en la app instalada."}
+        </p>
+      )}
 
       {installed ? (
         <p className="mt-8 rounded-2xl bg-football/15 px-5 py-6 text-center font-bold text-football">{t("installedOk")}</p>
@@ -81,11 +88,9 @@ export default function InstallPage() {
         </>
       )}
 
-      {prefs.onboarded && (
-        <Link href="/" className="mt-8 block text-center font-semibold text-muted">
-          {installed ? "OK" : t("later")}
-        </Link>
-      )}
+      <Link href="/" className="mt-8 block text-center font-semibold text-muted">
+        {installed ? "OK" : prefs.onboarded ? t("later") : lang === "fr" ? "Continuer sans installer" : "Continuar sin instalar"}
+      </Link>
     </div>
   );
 }

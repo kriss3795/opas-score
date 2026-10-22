@@ -71,6 +71,15 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+          {(prefs.athletes ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {(prefs.athletes ?? []).map((a) => (
+                <span key={a.id} className="rounded-full bg-gold/15 px-2.5 py-1 text-sm text-gold">
+                  👤 {a.name}
+                </span>
+              ))}
+            </div>
+          )}
           {(prefs.players ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {prefs.players.map((p) => (

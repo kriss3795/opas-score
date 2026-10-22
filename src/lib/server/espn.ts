@@ -205,20 +205,70 @@ export async function teamsOf(league: string): Promise<TeamOption[] | null> {
 
 // Lista gigante: une los equipos de todas las competiciones del catálogo.
 export async function allTeams(): Promise<TeamOption[]> {
-  const results = await Promise.all(LEAGUES.filter((l) => l.kind !== "event").map((l) => teamsOf(l.id)));
+  const list = LEAGUES.filter((l) => l.kind !== "event" && l.kind !== "tennis");
+  const results = await Promise.all(list.map((l) => teamsOf(l.id)));
+  const women = new Set(list.filter((l) => l.group === "women").map((l) => l.id));
+  const norm = (x: string) =>
+    x
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  // Un club aparece en varias competiciones: se junta en una sola entrada (mismo deporte y mismo nombre).
   const map = new Map<string, TeamOption>();
-  results.forEach((list) => {
-    for (const tm of list ?? []) {
-      const key = `${tm.sport}:${tm.id}`;
+  results.forEach((teams) => {
+    for (const tm of teams ?? []) {
+      const isWomen = tm.leagues.every((l) => women.has(l));
+      const name = isWomen ? `${tm.name} (F)` : tm.name;
+      const key = `${tm.sport}:${norm(name)}`;
       const prev = map.get(key);
-      if (prev) prev.leagues = Array.from(new Set([...prev.leagues, ...tm.leagues]));
-      else map.set(key, { ...tm });
+      if (prev) {
+        prev.leagues = Array.from(new Set([...prev.leagues, ...tm.leagues]));
+        if (prev.id !== tm.id && !(prev.alt ?? []).includes(tm.id)) prev.alt = [...(prev.alt ?? []), tm.id];
+        if (!prev.logo && tm.logo) prev.logo = tm.logo;
+      } else map.set(key, { ...tm, name, short: isWomen && tm.short ? `${tm.short} (F)` : tm.short });
     }
   });
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Detalle de un evento (golf, MMA, carreras): clasificación o cartelera.
+// Búsqueda de jugadores (ESPN): se sigue a un jugador a través de los partidos de su equipo.
+const SPORT_OF: Record<string, string> = {
+  soccer: "football",
+  basketball: "basketball",
+  hockey: "hockey",
+  football: "nfl",
+  baseball: "baseball",
+  rugby: "rugby",
+  "australian-football": "afl",
+};
+
+export async function searchAthletes(q: string) {
+  const d = await getJson<any>(
+    `https://site.web.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(q)}&limit=25&type=player`,
+    3600,
+  );
+  if (!d) return null;
+  return (d.items ?? [])
+    .map((it: any) => {
+      const sport = SPORT_OF[it.sport];
+      const team = it.teamRelationships?.[0];
+      if (!sport) return null;
+      return {
+        id: String(it.id),
+        name: it.displayName,
+        short: it.shortName,
+        sport,
+        teamId: team?.id ? String(team.id) : team?.core?.id ? String(team.core.id) : undefined,
+        teamName: team?.displayName ?? team?.core?.displayName ?? team?.core?.name,
+        teamLogo: team?.core?.logos?.[0]?.href,
+        league: it.league,
+        flag: it.flag?.href,
+      };
+    })
+    .filter(Boolean);
+}
+
 export async function eventDetail(league: string, id: string, day: string) {
   const meta = leagueMeta(league);
   if (!meta || !/^\d{8}$/.test(day)) return null;

@@ -99,6 +99,10 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
   };
 
   const fav = (s?: Side) => (s?.id ? favIds.has(`${e.sport}:${s.id}`) : false);
+  // Jugadores seguidos que juegan este partido (por su equipo).
+  const players = (prefs.athletes ?? []).filter(
+    (a) => a.sport === e.sport && a.teamId && (a.teamId === e.home?.id || a.teamId === e.away?.id),
+  );
   const label =
     e.sport === "f1"
       ? meta.name[lang]
@@ -118,6 +122,16 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
           </span>
         )}
       </div>
+
+      {players.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {players.map((a) => (
+            <span key={a.id} className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-bold text-gold">
+              👤 {a.short ?? a.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">

@@ -4,12 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/client/store";
 import { LEAGUES, SPORTS, sportMeta, type Group } from "@/lib/catalog";
-import type { DriverOption, PlayerOption, SportId, TeamOption } from "@/lib/types";
-import { isStandalone, platform } from "@/lib/client/push";
+import type { AthleteOption, DriverOption, PlayerOption, SportId, TeamOption } from "@/lib/types";
 import { IconCheck, IconSearch } from "./Icons";
 import TeamLogo from "./TeamLogo";
 
-type Step = "sports" | "leagues" | "teams" | "players" | "drivers";
+type Step = "sports" | "leagues" | "teams" | "athletes" | "players" | "drivers";
 
 const norm = (s: string) =>
   s
@@ -27,6 +26,7 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
   const [teams, setTeams] = useState<TeamOption[]>(prefs.teams);
   const [drivers, setDrivers] = useState<DriverOption[]>(prefs.drivers);
   const [players, setPlayers] = useState<PlayerOption[]>(prefs.players ?? []);
+  const [athletes, setAthletes] = useState<AthleteOption[]>(prefs.athletes ?? []);
   const [step, setStep] = useState<Step>("sports");
   const [available, setAvailable] = useState<Set<string> | null>(null);
 
@@ -43,7 +43,7 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
   const steps = useMemo<Step[]>(() => {
     const s: Step[] = ["sports"];
     if (leagueSports.length) s.push("leagues");
-    if (teamSports.length) s.push("teams");
+    if (teamSports.length) s.push("teams", "athletes");
     if (sports.includes("tennis")) s.push("players");
     if (sports.includes("f1")) s.push("drivers");
     return s;
@@ -58,10 +58,10 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
       teams: teams.filter((tm) => keepSport(tm.sport)),
       drivers: sports.includes("f1") ? drivers : [],
       players: sports.includes("tennis") ? players : [],
+      athletes: athletes.filter((a) => sports.includes(a.sport)),
       onboarded: true,
     });
     if (editing) router.push("/settings");
-    else if (platform() !== "desktop" && !isStandalone()) router.push("/install");
   };
   const next = () => (idx < steps.length - 1 ? setStep(steps[idx + 1]) : finish());
   const back = () => (idx > 0 ? setStep(steps[idx - 1]) : editing ? router.push("/settings") : undefined);
@@ -165,6 +165,10 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
             leagues={leagues}
             sports={teamSports}
           />
+        )}
+
+        {step === "athletes" && (
+          <AthletePicker selected={athletes} sports={teamSports} onToggle={(a) => setAthletes(toggle(athletes, a, (x, y) => x.id === y.id))} />
         )}
 
         {step === "players" && (
@@ -424,6 +428,59 @@ function DriverPicker({ selected, onToggle }: { selected: DriverOption[]; onTogg
               {d.team && <span className="block text-sm text-muted">{d.team}</span>}
             </span>
             <Check on={selected.some((x) => x.id === d.id)} />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AthletePicker({ selected, sports, onToggle }: { selected: AthleteOption[]; sports: SportId[]; onToggle: (a: AthleteOption) => void }) {
+  const { lang, t } = useApp();
+  const fr = lang === "fr";
+  const [q, setQ] = useState("");
+  const [res, setRes] = useState<AthleteOption[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const query = q.trim();
+    if (query.length < 3) {
+      setRes(null);
+      return;
+    }
+    setBusy(true);
+    const id = setTimeout(() => {
+      fetch(`/api/athletes?q=${encodeURIComponent(query)}`)
+        .then((r) => r.json())
+        .then((d) => setRes((d.athletes ?? []).filter((a: AthleteOption) => sports.includes(a.sport))))
+        .catch(() => setRes([]))
+        .finally(() => setBusy(false));
+    }, 350);
+    return () => clearTimeout(id);
+  }, [q, sports]);
+
+  return (
+    <section>
+      <Title
+        title={fr ? "Tes joueurs" : "Tus jugadores"}
+        sub={fr ? "Suis des joueurs (Mbappé, Alexis Sánchez…) : tu verras tous les matchs de leur équipe." : "Sigue jugadores (Mbappé, Alexis Sánchez…): verás todos los partidos de su equipo."}
+      />
+      <SelectedChips items={selected} onRemove={onToggle} label={(a) => <>👤 {a.short ?? a.name}</>} />
+      <SearchBox value={q} onChange={setQ} placeholder={fr ? "Nom du joueur (3 lettres min.)" : "Nombre del jugador (mín. 3 letras)"} />
+      {busy && <p className="py-4 text-center text-muted">{t("loading")}</p>}
+      {res && !busy && res.length === 0 && <p className="py-4 text-center text-muted">{t("noResult")}</p>}
+      {!q && <p className="py-2 text-sm text-muted">{fr ? "Étape facultative : tu peux passer." : "Paso opcional: puedes saltarlo."}</p>}
+      <div className="overflow-hidden rounded-2xl bg-card">
+        {(res ?? []).map((a) => (
+          <button key={a.id} onClick={() => onToggle(a)} className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-0">
+            <TeamLogo src={a.teamLogo} name={a.teamName ?? a.name} size={30} />
+            <span className="flex-1">
+              <span className="block leading-snug font-semibold">{a.name}</span>
+              <span className="block text-xs text-muted">
+                {sportMeta(a.sport).emoji} {a.teamName ?? ""}
+              </span>
+            </span>
+            <Check on={selected.some((x) => x.id === a.id)} />
           </button>
         ))}
       </div>

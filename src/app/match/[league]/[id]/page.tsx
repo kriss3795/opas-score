@@ -25,14 +25,15 @@ const STAT_LABEL: Record<string, { fr: string; es: string }> = {
 
 export default function MatchPage({ params }: { params: Promise<{ league: string; id: string }> }) {
   const { league, id } = use(params);
-  const { t, lang } = useApp();
+  const { t, lang, prefs } = useApp();
+  const playersParam = (prefs.athletes ?? []).map((a) => a.name).join(",");
   const [m, setM] = useState<any>(undefined);
   const [sofa, setSofa] = useState(false);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const load = () =>
-      fetch(`/api/match?league=${league}&id=${id}`)
+      fetch(`/api/match?league=${league}&id=${id}&players=${encodeURIComponent(playersParam)}`)
         .then((r) => r.json())
         .then((d) => {
           setM(d.match ?? null);
@@ -44,7 +45,7 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
         });
     load();
     return () => clearTimeout(timer);
-  }, [league, id]);
+  }, [league, id, playersParam]);
 
   const meta = leagueMeta(league);
   const tv = isInFrance() ? meta?.tvFR : undefined;

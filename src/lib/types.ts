@@ -68,6 +68,7 @@ export interface Standings {
 export interface TeamOption {
   id: string;
   sport?: SportId; // ausente en preferencias antiguas = fútbol
+  alt?: string[]; // otros ids del mismo club en la fuente
   name: string;
   short?: string;
   logo?: string;
@@ -91,12 +92,25 @@ export interface PlayerOption {
   rank?: number;
 }
 
+export interface AthleteOption {
+  id: string;
+  name: string;
+  short?: string;
+  sport: SportId;
+  teamId?: string;
+  teamName?: string;
+  teamLogo?: string;
+  league?: string;
+  flag?: string;
+}
+
 export interface Prefs {
   sports: SportId[];
   leagues: string[]; // ids de competiciones de fútbol seguidas
   teams: TeamOption[];
   drivers: DriverOption[];
   players: PlayerOption[];
+  athletes?: AthleteOption[]; // jugadores seguidos (fútbol, básquetbol, etc.)
   important: string[]; // ids de eventos marcados con aviso
   lang: "fr" | "es" | null; // null = idioma del teléfono
   theme: "dark" | "light";
