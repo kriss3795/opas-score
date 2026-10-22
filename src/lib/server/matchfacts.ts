@@ -69,7 +69,8 @@ export async function matchFacts(m: Detail, followed: string[]): Promise<Fact[]>
     for (const l of m.leaders.filter((x) => /goal/i.test(x.category))) {
       const g = Number(String(l.value).split(" ")[0]);
       const tg = row(l.teamId)?.gf;
-      if (!g || !tg || g < 3) continue;
+      // El dato del jugador puede incluir otras competiciones: si supera los goles del equipo, no se usa.
+      if (!g || !tg || g < 3 || g > tg) continue;
       const pct = Math.round((g / tg) * 100);
       if (pct < 30) continue;
       const t = teams.find((x) => x.id === l.teamId)!;
@@ -91,15 +92,17 @@ export async function matchFacts(m: Detail, followed: string[]): Promise<Fact[]>
       const maxGf = Math.max(...rows.map((r) => r.gf!));
       const minGa = Math.min(...rows.map((r) => r.ga!));
       const minGf = Math.min(...rows.map((r) => r.gf!));
-      const unit = football ? ["buts", "goles"] : ["points", "puntos"];
+      const unit = football || m.sport === "hockey" ? ["buts", "goles"] : ["points", "puntos"];
+      // Solo si el récord es de un único equipo (con empate, "el mejor" sería falso).
+      const only = (k: "gf" | "ga", v: number) => rows.filter((x) => x[k] === v).length === 1;
       for (const t of teams) {
         const r = row(t.id);
         if (!r || r.gf === undefined || r.ga === undefined) continue;
-        if (r.gf === maxGf)
+        if (r.gf === maxGf && only("gf", maxGf))
           facts.push({ fr: `${t.name} possède la meilleure attaque de ${lgFr} : ${r.gf} ${unit[0]} en ${r.played} matchs.`, es: `${t.name} tiene el mejor ataque de ${lgEs}: ${r.gf} ${unit[1]} en ${r.played} partidos.`, source: "ESPN", url, type: `att-${t.id}`, score: 78 });
-        if (r.ga === minGa)
+        if (r.ga === minGa && only("ga", minGa))
           facts.push({ fr: `${t.name} possède la meilleure défense de ${lgFr} : seulement ${r.ga} ${unit[0]} encaissés.`, es: `${t.name} tiene la mejor defensa de ${lgEs}: solo ${r.ga} ${unit[1]} recibidos.`, source: "ESPN", url, type: `def-${t.id}`, score: 78 });
-        if (football && r.gf === minGf)
+        if (football && r.gf === minGf && only("gf", minGf))
           facts.push({ fr: `${t.name} a la pire attaque de ${lgFr} (${r.gf} buts).`, es: `${t.name} tiene el peor ataque de ${lgEs} (${r.gf} goles).`, source: "ESPN", url, type: `att-${t.id}`, score: 70 });
       }
       // 5) Qué cambia con una victoria (tabla provisional).

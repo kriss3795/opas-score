@@ -93,14 +93,17 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
 
   const sport = m.sport as string;
   const live = m.state === "in";
-  const ht = m.statusName?.includes("HALFTIME");
+  const ht = m.statusName?.includes("HALFTIME") && !m.statusName?.includes("ET");
+  // Aplazado o cancelado: la fuente lo marca como "terminado" con 0-0; no se muestra como resultado.
+  const off = /POSTPONED|CANCELED|CANCELLED|ABANDONED/.test(m.statusName ?? "");
+  const offText = /POSTPONED/.test(m.statusName ?? "") ? t("postponed") : fr ? "Annulé" : "Cancelado";
   const SPECIAL: Record<string, string> = {
     PEN: fr ? "Tirs au but" : "Penales",
     BRK: fr ? "Pause" : "Pausa",
     SUSP: fr ? "Interrompu" : "Suspendido",
   };
   const clockText = SPECIAL[m.detail] ?? (["football", "rugby"].includes(sport) ? m.clock : m.detail);
-  const status = live ? (ht ? t("halftime") : clockText) : m.state === "post" ? t("final") : m.start ? `${fmtDay(m.start, lang)} · ${fmtTime(m.start, lang)}` : "";
+  const status = off ? offText : live ? (ht ? t("halftime") : clockText) : m.state === "post" ? `${t("final")}${m.detail === "AET" ? (fr ? (sport === "football" ? " (a.p.)" : " (prol.)") : " (prórroga)") : ""}` : m.start ? `${fmtDay(m.start, lang)} · ${fmtTime(m.start, lang)}` : "";
 
   if (sofa)
     return (
@@ -119,6 +122,11 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
           <span className="mx-4 text-muted">:</span>
           {m.away?.score ?? "–"}
         </div>
+        {m.home?.pen !== undefined && m.away?.pen !== undefined && (
+          <div className="font-score text-4xl font-bold text-muted">
+            ({m.home.pen}-{m.away.pen} {fr ? "t.a.b." : "pen."})
+          </div>
+        )}
         <div className="text-sm text-muted">{t("close")}</div>
       </button>
     );
@@ -142,7 +150,7 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           <TeamHead s={m.home} />
           <div className="font-score px-1 text-6xl font-extrabold whitespace-nowrap">
-            {m.state === "pre" ? (
+            {m.state === "pre" || off ? (
               <span className="text-4xl">{m.start ? fmtTime(m.start, lang) : ""}</span>
             ) : (
               <>
@@ -161,7 +169,7 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
         )}
         <div className={`mt-3 flex items-center justify-center gap-2 text-sm font-bold ${live ? "text-live" : "text-muted"}`}>
           {live && <span className="live-dot h-2 w-2 rounded-full bg-live" />}
-          {m.state === "pre" && m.start ? fmtDay(m.start, lang) : status}
+          {m.state === "pre" && m.start && !off ? fmtDay(m.start, lang) : status}
         </div>
         {/* Goleadores bajo el marcador (fútbol) */}
         {m.timeline?.some((x: any) => ["goal", "penalty", "owngoal"].includes(x.kind)) && (

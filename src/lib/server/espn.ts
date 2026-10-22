@@ -26,7 +26,7 @@ export function liveDetail(st: any, sport: string): string | undefined {
   return clock || undefined;
 }
 
-function mapStatus(st: any, sport = "football"): { status: EventStatus; detail?: string } {
+export function mapStatus(st: any, sport = "football"): { status: EventStatus; detail?: string } {
   const type = st?.type ?? {};
   const name: string = type.name ?? "";
   if (name.includes("POSTPONED")) return { status: "cancelled", detail: "postponed" };

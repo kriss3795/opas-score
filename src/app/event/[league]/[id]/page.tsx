@@ -11,6 +11,20 @@ import { IconBack } from "@/components/Icons";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Detalle de torneos de golf, veladas de UFC y carreras (IndyCar, NASCAR).
+// Resultado de un combate: la fuente lo da en inglés ("KO/TKO", "Decision - Unanimous"…).
+function fightResult(d: string, lang: "fr" | "es") {
+  const fr = lang === "fr";
+  return d
+    .replace(/^Final\s*-?\s*/i, "")
+    .replace(/Decision\s*-\s*Unanimous/i, fr ? "Décision unanime" : "Decisión unánime")
+    .replace(/Decision\s*-\s*Split/i, fr ? "Décision partagée" : "Decisión dividida")
+    .replace(/Decision\s*-\s*Majority/i, fr ? "Décision majoritaire" : "Decisión mayoritaria")
+    .replace(/Submission/i, fr ? "Soumission" : "Sumisión")
+    .replace(/No Contest/i, fr ? "Sans décision" : "Sin resultado")
+    .replace(/\bDraw\b/i, fr ? "Match nul" : "Empate")
+    .trim();
+}
+
 export default function EventPage({ params }: { params: Promise<{ league: string; id: string }> }) {
   const { league, id } = use(params);
   const day = useSearchParams().get("d") ?? "";
@@ -84,14 +98,15 @@ export default function EventPage({ params }: { params: Promise<{ league: string
                         {x.record && <span className="text-xs text-muted">{x.record}</span>}
                       </div>
                     ))}
-                    {f.status === "post" && f.detail && <div className="mt-1.5 text-xs text-muted">{f.detail}</div>}
+                    {f.status === "post" && f.detail && <div className="mt-1.5 text-xs text-muted">{fightResult(f.detail, lang)}</div>}
                   </li>
                 ))}
               </ul>
             </section>
           )}
 
-          {ev.leaderboard?.length > 0 && (
+          {/* Antes de empezar, el orden de la fuente es solo el de salida: no se muestra como clasificación. */}
+          {ev.state !== "pre" && ev.leaderboard?.length > 0 && (
             <section className="rounded-3xl bg-card p-4">
               <h3 className="mb-3 font-bold">{t("leaderboard")}</h3>
               <ol>
@@ -108,7 +123,7 @@ export default function EventPage({ params }: { params: Promise<{ league: string
             </section>
           )}
 
-          {!ev.fights?.length && !ev.leaderboard?.length && (
+          {!ev.fights?.length && (ev.state === "pre" || !ev.leaderboard?.length) && (
             <p className="rounded-2xl bg-card px-5 py-6 text-center text-sm text-muted">
               {lang === "fr" ? "Le classement apparaîtra dès le début de l'événement." : "La clasificación aparecerá cuando empiece el evento."}
             </p>

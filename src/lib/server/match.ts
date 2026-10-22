@@ -1,5 +1,5 @@
 import "server-only";
-import { eventSummary, teamStandings, liveDetail } from "./espn";
+import { eventSummary, teamStandings, mapStatus } from "./espn";
 import { leagueMeta } from "../catalog";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -299,7 +299,7 @@ export async function matchDetail(league: string, id: string) {
     statusName: type.name ?? "",
     clock: status.displayClock,
     period: status.period,
-    detail: type.state === "in" ? liveDetail(status, sport) : undefined,
+    detail: mapStatus(status, sport).detail,
     home,
     away,
     timeline,
