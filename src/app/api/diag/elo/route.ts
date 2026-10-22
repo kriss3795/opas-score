@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
+import { eloFixtures } from "@/lib/server/clubelo";
 
 export const dynamic = "force-dynamic";
 
-// Diagnóstico temporal: filas de la tabla de partidos de clubelo.com/API como texto.
+// Diagnóstico: partidos con probabilidades leídos de ClubElo.
 export async function GET() {
-  const res = await fetch("http://clubelo.com/API", { cache: "no-store" });
-  const html = await res.text();
-  const rows = Array.from(html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)).map((m) =>
-    Array.from(m[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)).map((c) => ({
-      t: c[1].replace(/<[^>]+>/g, "|").replace(/\s+/g, " ").replace(/\|+/g, "|").trim(),
-      href: (c[1].match(/href="([^"]+)"/) ?? [])[1],
-    })),
-  );
-  return NextResponse.json({ n: rows.length, rows: rows.slice(0, 14), tail: rows.slice(-3) });
+  const rows = await eloFixtures();
+  return NextResponse.json({ count: rows?.length ?? 0, sample: (rows ?? []).filter((r) => /paris|lyon|liverpool|arsenal|real/i.test(`${r.home} ${r.away}`)).slice(0, 8), first: rows?.slice(0, 3) });
 }

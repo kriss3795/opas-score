@@ -13,46 +13,55 @@ export interface EloFixture {
 
 let cache: { at: number; rows: EloFixture[] } | null = null;
 
+// La API CSV de partidos de ClubElo fue desactivada ("Fixtures API deactivated").
+// La misma tabla de partidos con probabilidades 1 / X / 2 está en clubelo.com/API (HTML): se lee de ahí.
+// Cada partido ocupa dos filas: local (con % de 1 y de X) y visita (con % de 2).
 export async function eloFixtures(): Promise<EloFixture[] | null> {
   if (cache && Date.now() - cache.at < 3 * 3600000) return cache.rows;
   try {
-    const res = await fetch("http://api.clubelo.com/Fixtures", { next: { revalidate: 10800 } });
+    const res = await fetch("http://clubelo.com/API", { next: { revalidate: 10800 } });
     if (!res.ok) return null;
-    const text = await res.text();
-    const lines = text.trim().split(/\r?\n/);
-    const head = lines[0].split(",");
-    const iDate = head.indexOf("Date");
-    const iHome = head.indexOf("Home");
-    const iAway = head.indexOf("Away");
-    if (iDate < 0 || iHome < 0 || iAway < 0) return null;
-    const cols = head
-      .map((h, i) => {
-        const m = h.match(/^GD([<>=])(-?\d+)$/);
-        if (!m) return null;
-        const v = Number(m[2]);
-        const sign = m[1] === "<" ? -1 : m[1] === ">" ? 1 : Math.sign(v);
-        return { i, sign };
-      })
-      .filter((x): x is { i: number; sign: number } => x !== null);
-    if (cols.length < 5) return null;
-    const rows: EloFixture[] = [];
-    for (const line of lines.slice(1)) {
-      const c = line.split(",");
-      let h = 0,
-        d = 0,
-        a = 0;
-      for (const { i, sign } of cols) {
-        const p = Number(c[i]) || 0;
-        if (sign > 0) h += p;
-        else if (sign < 0) a += p;
-        else d += p;
+    const html = await res.text();
+    const rows = Array.from(html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)).map((m) =>
+      Array.from(m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)).map((c) => ({
+        raw: c[1],
+        t: c[1].replace(/<[^>]+>/g, "|").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").replace(/\|+/g, "|").trim(),
+      })),
+    );
+    const pct = (t: string) => {
+      const m = t.match(/^\|?\s*(\d+(?:\.\d+)?)\s*\|[^|]*\|\s*%/);
+      return m ? Number(m[1]) / 100 : null;
+    };
+    // Fila de un club: celda con enlace y nombre; luego "partidos jugados" y los porcentajes.
+    const parse = (cells: { raw: string; t: string }[]) => {
+      const ci = cells.findIndex((c) => /href=/.test(c.raw) && /[A-Za-z]{3,}/.test(c.t));
+      if (ci < 0) return null;
+      const name = c2name(cells[ci].t);
+      const ps: number[] = [];
+      for (let k = ci + 2; k < cells.length; k++) {
+        const v = pct(cells[k].t);
+        if (v === null) break;
+        ps.push(v);
       }
-      const tot = h + d + a;
-      if (tot <= 0) continue;
-      rows.push({ date: c[iDate], home: c[iHome], away: c[iAway], pHome: h / tot, pDraw: d / tot, pAway: a / tot });
+      return name ? { name, ps } : null;
+    };
+    const c2name = (t: string) => t.split("|").map((x) => x.trim()).filter((x) => x && !/^\d+$/.test(x)).pop() ?? "";
+    const out: EloFixture[] = [];
+    for (let i = 0; i < rows.length - 1; i++) {
+      const a = parse(rows[i]);
+      if (!a || a.ps.length !== 2) continue;
+      const b = parse(rows[i + 1]);
+      if (!b || b.ps.length !== 1) continue;
+      const [h, d] = a.ps;
+      const w = b.ps[0];
+      const tot = h + d + w;
+      if (tot < 0.9 || tot > 1.1) continue; // fila mal leída: se descarta
+      out.push({ date: "", home: a.name, away: b.name, pHome: h / tot, pDraw: d / tot, pAway: w / tot });
+      i++;
     }
-    cache = { at: Date.now(), rows };
-    return rows;
+    if (!out.length) return null;
+    cache = { at: Date.now(), rows: out };
+    return out;
   } catch {
     return null;
   }
@@ -104,7 +113,8 @@ const ALIAS: Record<string, string[]> = {
 
 export function matchElo(rows: EloFixture[], date: string, home: string[], away: string[]): EloFixture | null {
   const t = new Date(date).getTime();
-  const near = (d: string) => Math.abs(new Date(`${d}T12:00:00Z`).getTime() - t) < 36 * 3600000;
+  // La tabla web no trae la fecha: se aceptan partidos próximos (solo hay uno por par de equipos).
+  const near = (d: string) => !d || Math.abs(new Date(`${d}T12:00:00Z`).getTime() - t) < 36 * 3600000;
   const hn = new Set(home.filter(Boolean).map(norm));
   const an = new Set(away.filter(Boolean).map(norm));
   const fits = (eloName: string, names: Set<string>) => {
