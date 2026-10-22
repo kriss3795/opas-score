@@ -30,7 +30,9 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
           Recharger
         </button>
       </div>
-      <p className="mt-4 max-w-sm text-xs break-words text-muted">{error.message}</p>
+      <p className="mt-4 max-w-sm text-xs break-words text-muted">{error.message}
+        {"\n"}
+        {(error.stack ?? "").split("\n").slice(0, 4).join(" ← ")}</p>
     </div>
   );
 }

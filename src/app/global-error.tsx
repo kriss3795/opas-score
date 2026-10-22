@@ -12,7 +12,9 @@ export default function GlobalError({ error }: { error: Error }) {
         >
           Recharger / Recargar
         </button>
-        <p style={{ fontSize: 12, opacity: 0.6, marginTop: 24, wordBreak: "break-word" }}>{error.message}</p>
+        <p style={{ fontSize: 12, opacity: 0.6, marginTop: 24, wordBreak: "break-word" }}>{error.message}
+        {"\n"}
+        {(error.stack ?? "").split("\n").slice(0, 4).join(" ← ")}</p>
       </body>
     </html>
   );
