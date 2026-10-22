@@ -4,6 +4,7 @@ import { supa, sendPush, lastPushError } from "@/lib/server/push";
 import { isMorning, localDate, morningSummary } from "@/lib/server/morning";
 import { eventState, liveAlerts, f1Alerts, tennisAlerts } from "@/lib/server/live";
 import { getJson } from "@/lib/server/http";
+import { f1Live } from "@/lib/server/espn";
 import { autoFollow } from "@/lib/server/autofollow";
 
 export const maxDuration = 60;
@@ -78,7 +79,8 @@ async function run(req: NextRequest) {
     .select("id, endpoint, event_id, url, start_at, league, last_state")
     .not("league", "is", null)
     .lte("start_at", new Date(now + 2 * 60000).toISOString())
-    .gte("start_at", new Date(now - 4 * 3600000).toISOString())
+    // 12 h: en tenis la hora es estimada y los partidos empiezan mucho después de lo previsto.
+    .gte("start_at", new Date(now - 12 * 3600000).toISOString())
     .limit(200);
   if (!fErr) {
     const states = new Map<string, Awaited<ReturnType<typeof eventState>>>();
@@ -92,6 +94,13 @@ async function run(req: NextRequest) {
       const { data: subRow } = await db.from("push_subs").select("sub, lang").eq("endpoint", f.endpoint).maybeSingle();
       if (!subRow) continue;
       const mine = { ...st.state };
+      // Aplazado o suspendido: se deja de seguir (se marca como terminado sin avisar).
+      if (mine.s === "cancelled") {
+        await db.from("reminders").update({ last_state: { ...mine, s: "post" } }).eq("id", f.id);
+        continue;
+      }
+      // Partido de fútbol/equipos que sigue "por empezar" mucho después de su hora: probable aplazamiento.
+      if (mine.s === "pre" && !String(f.league).startsWith("tennis.") && now - new Date(f.start_at).getTime() > 4 * 3600000) continue;
       const lng = subRow.lang === "es" ? "es" : "fr";
       const alerts = String(f.league).startsWith("tennis.")
         ? tennisAlerts(prev, mine, st.e, lng, f.url ?? "/")
@@ -111,20 +120,32 @@ async function run(req: NextRequest) {
     .select("id, endpoint, event_id, title, url, start_at, last_state")
     .like("event_id", "f1-%")
     .lte("start_at", new Date(now + 60000).toISOString())
-    .gte("start_at", new Date(now - 4 * 3600000).toISOString())
+    .gte("start_at", new Date(now - 30 * 3600000).toISOString())
     .limit(100);
   const winners = new Map<string, string | null>();
   for (const f of f1Follows ?? []) {
     if (f.last_state?.done) continue;
     const [, season, round, session] = String(f.event_id).split("-");
     let winner: string | null = null;
-    if ((session === "race" || session === "sprint") && now - new Date(f.start_at).getTime() > 60 * 60000) {
+    const elapsed = now - new Date(f.start_at).getTime();
+    const minLen = session === "race" ? 80 : session === "sprint" ? 25 : 40;
+    if (["race", "sprint", "quali", "sq"].includes(session) && elapsed > minLen * 60000) {
       const k = `${season}-${round}-${session}`;
       if (!winners.has(k)) {
-        const d = await getJson<any>(`https://api.jolpi.ca/ergast/f1/${season}/${round}/${session === "race" ? "results" : "sprint"}.json?limit=1`, 300);
-        const race = d?.MRData?.RaceTable?.Races?.[0];
-        const w = (race?.Results ?? race?.SprintResults)?.[0]?.Driver;
-        winners.set(k, w ? `${w.givenName} ${w.familyName}` : null);
+        // 1) ESPN en vivo: sesión terminada y primer lugar.
+        let w: string | null = null;
+        const espnName: Record<string, string> = { race: "Race", sprint: "SR", quali: "Qual", sq: "SS" };
+        const liveSessions = await f1Live().catch(() => null);
+        const ls = liveSessions?.find((x) => x.name === espnName[session]);
+        if (ls?.status === "post" && ls.rows[0]) w = ls.rows[0].name;
+        // 2) Respaldo: resultados oficiales de Jolpica (carrera y sprint).
+        if (!w && (session === "race" || session === "sprint")) {
+          const d = await getJson<any>(`https://api.jolpi.ca/ergast/f1/${season}/${round}/${session === "race" ? "results" : "sprint"}.json?limit=1`, 300);
+          const race = d?.MRData?.RaceTable?.Races?.[0];
+          const drv = (race?.Results ?? race?.SprintResults)?.[0]?.Driver;
+          if (drv) w = `${drv.givenName} ${drv.familyName}`;
+        }
+        winners.set(k, w);
       }
       winner = winners.get(k) ?? null;
     }

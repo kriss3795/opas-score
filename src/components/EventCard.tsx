@@ -10,6 +10,7 @@ import { currentSubscription, enablePush, setReminder } from "@/lib/client/push"
 import TeamLogo from "./TeamLogo";
 import { agendaParams } from "@/lib/client/useEvents";
 import { playSound } from "@/lib/client/sounds";
+import { gpName } from "@/lib/f1names";
 import { IconBell, IconTv } from "./Icons";
 
 const SESSION_KEY: Record<string, Key> = {
@@ -30,7 +31,13 @@ export function sessionLabel(key: string, t: (k: Key) => string) {
 export function StatusBadge({ e }: { e: SportEvent }) {
   const { t, lang } = useApp();
   if (e.status === "in") {
-    const detail = e.statusDetail === "HT" ? t("halftime") : e.sport === "f1" || !e.statusDetail ? t("live") : e.statusDetail;
+    const special: Record<string, string> = {
+      HT: t("halftime"),
+      PEN: lang === "fr" ? "Tirs au but" : "Penales",
+      BRK: lang === "fr" ? "Pause" : "Pausa",
+      SUSP: lang === "fr" ? "Interrompu" : "Suspendido",
+    };
+    const detail = special[e.statusDetail ?? ""] ?? (e.sport === "f1" || !e.statusDetail ? t("live") : e.statusDetail);
     return (
       <span className="flex items-center gap-1.5 text-right text-sm leading-tight font-bold text-live">
         <span className="live-dot h-2 w-2 rounded-full bg-live" />
@@ -38,7 +45,14 @@ export function StatusBadge({ e }: { e: SportEvent }) {
       </span>
     );
   }
-  if (e.status === "post") return <span className="text-sm font-semibold text-muted">{t("final")}</span>;
+  if (e.status === "post")
+    return (
+      <span className="text-right text-sm leading-tight font-semibold text-muted">
+        {t("final")}
+        {e.statusDetail === "PEN" && <span className="block text-[11px]">{lang === "fr" ? "t.a.b." : "penales"}</span>}
+        {e.statusDetail === "AET" && <span className="block text-[11px]">{lang === "fr" ? "a.p." : "alargue"}</span>}
+      </span>
+    );
   if (e.status === "cancelled") return <span className="text-sm font-semibold text-muted">{t("postponed")}</span>;
   // Fuera de hoy, siempre se muestra el día junto a la hora (evita confundir el sábado con hoy).
   const d = new Date(e.start);
@@ -57,8 +71,8 @@ export function StatusBadge({ e }: { e: SportEvent }) {
   );
 }
 
-function eventName(e: SportEvent, t: (k: Key) => string) {
-  if (e.sport === "f1") return `${e.competitionName} · ${sessionLabel(e.title ?? "race", t)}`;
+function eventName(e: SportEvent, t: (k: Key) => string, lang: "fr" | "es") {
+  if (e.sport === "f1") return `${gpName(e.competitionName, lang)} · ${sessionLabel(e.title ?? "race", t)}`;
   if (e.home && e.away) return `${e.home.name} – ${e.away.name}`;
   return e.title ?? e.competitionName;
 }
@@ -100,7 +114,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
     const total = (x: string) => x.split("-").reduce((a, b) => a + (Number(b) || 0), 0);
     const wasNumeric = /^\d+-\d+$/.test(prev.current);
     // Solo deportes de pocos tantos (en NBA o NFL el marcador cambia sin parar).
-    const lowScoring = ["football", "rugby", "hockey", "afl"].includes(e.sport);
+    const lowScoring = ["football", "rugby", "hockey"].includes(e.sport);
     if (lowScoring && wasNumeric && total(now) > total(prev.current) && e.status === "in") {
       setFlash(true);
       if (important || fav(e.home) || fav(e.away)) playSound(e.sport === "football" ? "goal" : "reminder");
@@ -136,7 +150,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
         }
         sub = await currentSubscription();
       }
-      const name = eventName(e, t);
+      const name = eventName(e, t, lang);
       // {min} lo reemplaza el servidor por los minutos que realmente faltan.
       const body = lang === "fr" ? `Dans {min} min${tv ? ` sur ${tv}` : ""} : ${name}` : `En {min} min${tv ? ` por ${tv}` : ""}: ${name}`;
       const teamSport = sportMeta(e.sport).kind === "team";
@@ -144,7 +158,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
         on: !important,
         eventId: e.id,
         start: e.start,
-        title: e.sport === "f1" ? `🏎️ ${e.competitionName}` : `${meta.emoji} Opa's Score`,
+        title: e.sport === "f1" ? `🏎️ ${gpName(e.competitionName, lang)}` : `${meta.emoji} Opa's Score`,
         body,
         url: e.link ?? "/",
         league: teamSport ? e.competitionId : undefined,
@@ -198,7 +212,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
           {!e.home || !e.away ? (
             <div>
               <div className="text-[17px] leading-snug font-bold">{e.sport === "f1" ? sessionLabel(e.title ?? "race", t) : e.title}</div>
-              {e.sport === "f1" && <div className="text-sm leading-snug text-muted">{e.competitionName}</div>}
+              {e.sport === "f1" && <div className="text-sm leading-snug text-muted">{gpName(e.competitionName, lang)}</div>}
               {e.sport !== "f1" && e.venue && <div className="text-sm leading-snug text-muted">{e.venue}</div>}
             </div>
           ) : (
@@ -228,7 +242,12 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
                       ))}
                     </span>
                   ) : (
-                    s.score !== undefined && <span className="font-score w-9 shrink-0 text-right text-2xl font-extrabold">{s.score}</span>
+                    s.score !== undefined && (
+                      <span className="font-score w-12 shrink-0 text-right text-2xl font-extrabold">
+                        {s.pen !== undefined && <sup className="mr-0.5 text-xs text-muted">({s.pen})</sup>}
+                        {s.score}
+                      </span>
+                    )
                   )}
                 </div>
               ))}

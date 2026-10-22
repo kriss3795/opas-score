@@ -40,12 +40,15 @@ export function FactsCard({ facts }: { facts: FactItem[] }) {
 }
 
 // Probabilidades de ClubElo para un partido de fútbol.
-export function EloBar({ elo, home, away }: { elo: { home: number; draw: number; away: number }; home: string; away: string }) {
+export function EloBar({ elo, home, away, prematch }: { elo: { home: number; draw: number; away: number }; home: string; away: string; prematch?: boolean }) {
   const { lang } = useApp();
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   return (
     <section className="rounded-3xl bg-card p-4">
-      <h3 className="mb-3 font-bold">{lang === "fr" ? "Probabilités de victoire" : "Probabilidades de victoria"}</h3>
+      <h3 className="mb-3 font-bold">
+        {lang === "fr" ? "Probabilités de victoire" : "Probabilidades de victoria"}
+        {prematch && <span className="ml-1 text-xs font-normal text-muted">{lang === "fr" ? "(avant le match)" : "(antes del partido)"}</span>}
+      </h3>
       <div className="flex h-3 overflow-hidden rounded-full">
         <div className="bg-brand" style={{ width: pct(elo.home) }} />
         <div className="bg-muted/40" style={{ width: pct(elo.draw) }} />

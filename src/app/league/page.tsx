@@ -6,6 +6,7 @@ import { useApp } from "@/lib/client/store";
 import { fmtDay, fmtTime } from "@/lib/i18n";
 import { LEAGUES, leagueMeta } from "@/lib/catalog";
 import TeamLogo from "@/components/TeamLogo";
+import { gpName } from "@/lib/f1names";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -350,7 +351,7 @@ function LeagueView({ code, token }: { code: string; token: string }) {
                   {p.result && <> · {fr ? "Réel" : "Real"} : {p.result.p ? p.result.p.map((d: string) => st.drivers.find((x: any) => x.id === d)?.code ?? d).join(" · ") : `${p.result.h}-${p.result.a}`}</>}
                 </span>
               </span>
-              <span className={`font-score text-2xl font-extrabold ${p.points ? "text-football" : "text-muted"}`}>{p.points === null ? "⏳" : `+${p.points}`}</span>
+              <span className={`font-score text-2xl font-extrabold ${p.points ? "text-football" : "text-muted"}`}>{p.voided ? (fr ? "annulé" : "anulado") : p.points === null ? "⏳" : `+${p.points}`}</span>
             </div>
           ))}
           {(st.myBets ?? []).map((b: any) => (
@@ -558,7 +559,7 @@ function PodiumPredict({ e, code, token, initial, drivers, onSaved }: { e: any; 
       <div className="mb-1 text-xs font-semibold text-muted">
         🏎️ {fmtDay(e.start, lang)} {fmtTime(e.start, lang)}
       </div>
-      <div className="mb-3 text-lg leading-tight font-extrabold">{e.label}</div>
+      <div className="mb-3 text-lg leading-tight font-extrabold">{gpName(e.label, lang)}</div>
       {[0, 1, 2].map((i) => (
         <div key={i} className="mb-2 flex items-center gap-3">
           <span className="w-8 text-2xl">{["🥇", "🥈", "🥉"][i]}</span>

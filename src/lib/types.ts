@@ -24,6 +24,7 @@ export interface Side {
   score?: string;
   winner?: boolean;
   sets?: string[]; // tenis: juegos por set
+  pen?: string; // tanda de penales
 }
 
 export interface SportEvent {

@@ -12,6 +12,7 @@ export interface LiveState {
   a?: string;
   ht?: boolean;
   ke?: string[]; // incidencias ya avisadas (ids de la fuente)
+  gk?: number; // goles ya avisados (evita duplicar si el marcador llega después de la incidencia)
 }
 
 interface KeyEv {
@@ -26,6 +27,8 @@ interface KeyEv {
 function parseKeyEvents(d: any): KeyEv[] {
   const out: KeyEv[] = [];
   for (const k of d?.keyEvents ?? []) {
+    // La tanda de penales (periodo 5) no se avisa tiro por tiro: el resultado llega con el pitazo final.
+    if (Number(k.period?.number ?? 0) >= 5) continue;
     const t = String(k.type?.text ?? k.type?.type ?? "").toLowerCase();
     let kind: KeyEv["kind"] | null = null;
     if (t.includes("own goal")) kind = "owngoal";
@@ -80,12 +83,13 @@ async function tennisState(league: string, eventId: string) {
 export function tennisAlerts(prev: LiveState | null, cur: LiveState, e: any, lang: "fr" | "es", url: string): PushPayload[] {
   const fr = lang === "fr";
   const out: PushPayload[] = [];
-  const tag = `live-${e.id}`;
+  const tag = `live-${e.id}-${cur.h}-${cur.a}`;
   const A = e.home.name, B = e.away.name;
   const sa = (cur.h ?? "").split(",").filter(Boolean).map(Number);
   const sb = (cur.a ?? "").split(",").filter(Boolean).map(Number);
   const score = sa.map((x, i) => `${x}-${sb[i] ?? 0}`).join(" ");
-  if ((!prev || prev.s === "pre") && cur.s === "in" && Date.now() - new Date(e.start).getTime() < 30 * 60000)
+  // En tenis la hora es estimada ("a continuación"): solo se avisa al ver el cambio real a "en juego".
+  if (prev?.s === "pre" && cur.s === "in")
     out.push({ title: fr ? "🎾 Début du match" : "🎾 Empieza el partido", body: `${A} – ${B} · ${e.competitionName}`, url, tag, kind: "start" });
   const prevSets = (prev?.h ?? "").split(",").filter(Boolean).length;
   if (prev && cur.s === "in" && sa.length > prevSets && prevSets > 0) {
@@ -113,11 +117,22 @@ export async function eventState(league: string, eventId: string, start: string)
   if (!e) return null;
   // En fútbol se leen además las incidencias (tarjetas, penales…) del partido en curso.
   let keyEvents: KeyEv[] = [];
-  if (meta.sport === "football" && e.status !== "pre") keyEvents = parseKeyEvents(await eventSummary(league, eventId, 20));
+  let h = e.home?.score, a = e.away?.score;
+  if (meta.sport === "football" && e.status !== "pre") {
+    const sum = await eventSummary(league, eventId, 20);
+    keyEvents = parseKeyEvents(sum);
+    // El resumen suele ir más rápido que el marcador general: se usa el más actualizado.
+    const cs: any[] = sum?.header?.competitions?.[0]?.competitors ?? [];
+    const sh = cs.find((c) => c.homeAway === "home")?.score, sa = cs.find((c) => c.homeAway === "away")?.score;
+    if (sh !== undefined && Number(sh) + Number(sa) > Number(h ?? 0) + Number(a ?? 0)) {
+      h = sh;
+      a = sa;
+    }
+  }
   return {
     e,
     keyEvents,
-    state: { s: e.status, h: e.home?.score, a: e.away?.score, ht: e.statusDetail === "HT" } as LiveState,
+    state: { s: e.status, h, a, ht: e.statusDetail === "HT" } as LiveState,
   };
 }
 
@@ -129,20 +144,35 @@ export function liveAlerts(prev: LiveState | null, cur: LiveState, e: any, keyEv
   const score = `${h} ${cur.h ?? 0}-${cur.a ?? 0} ${a}`;
   const clock = e.statusDetail && e.statusDetail !== "HT" ? ` (${e.statusDetail})` : "";
   const out: PushPayload[] = [];
-  const tag = `live-${e.id}`;
+  // Una notificación por incidencia (no se reemplazan entre sí: no se pierde un gol por una tarjeta).
+  let seq = 0;
+  const tagBase = `live-${e.id}`;
+  const nextTag = () => `${tagBase}-${cur.h ?? 0}-${cur.a ?? 0}-${seq++}`;
   const teamName = (id: string) => (id === e.home?.id ? h : id === e.away?.id ? a : "");
-  const goalWord = e.sport === "football" ? (fr ? "⚽ BUUUT !" : "⚽ ¡GOOOL!") : fr ? "🔔 Score" : "🔔 Marcador";
+  const WORD: Record<string, [string, string]> = {
+    football: ["⚽ BUUUT !", "⚽ ¡GOOOL!"],
+    hockey: ["🏒 But !", "🏒 ¡Gol!"],
+    rugby: ["🏉 Points !", "🏉 ¡Puntos!"],
+    nfl: ["🏈 Points !", "🏈 ¡Anotación!"],
+    baseball: ["⚾ Point !", "⚾ ¡Carrera!"],
+  };
+  const goalWord = (WORD[e.sport] ?? ["🔔 Score", "🔔 Marcador"])[fr ? 0 : 1];
+  // Básquetbol y fútbol australiano anotan sin parar: solo inicio, descanso y final (sin avisos por punto).
+  const scoreAlerts = !["basketball", "afl"].includes(e.sport);
+  // Cambios de marcador que no merecen aviso: punto extra (NFL) y conversión (rugby).
+  const minDelta = e.sport === "nfl" ? 2 : e.sport === "rugby" ? 3 : 1;
 
   const startedAgo = Date.now() - new Date(e.start).getTime();
   if ((!prev || prev.s === "pre") && cur.s === "in" && startedAgo < 20 * 60000) {
-    out.push({ title: fr ? "🟢 Coup d'envoi !" : "🟢 ¡Pitazo inicial!", body: `${h} – ${a}`, url, tag, kind: "start" });
+    out.push({ title: fr ? "🟢 Coup d'envoi !" : "🟢 ¡Pitazo inicial!", body: `${h} – ${a}`, url, tag: nextTag(), kind: "start" });
   }
 
   // Incidencias nuevas desde el último aviso (la primera vez solo se registran, no se avisan en bloque).
   const known = new Set(prev?.ke ?? []);
   const fresh = prev ? keyEvents.filter((k) => !known.has(k.id)) : [];
   cur.ke = Array.from(new Set([...(prev?.ke ?? []), ...keyEvents.map((k) => k.id)])).slice(-80);
-  const goalsFromEvents = fresh.some((k) => k.kind === "goal" || k.kind === "penalty" || k.kind === "owngoal");
+  const isGoal = (k: KeyEv) => k.kind === "goal" || k.kind === "penalty" || k.kind === "owngoal";
+  cur.gk = Math.max(prev?.gk ?? 0, keyEvents.filter(isGoal).length);
 
   for (const k of fresh) {
     const who = k.player ? `${k.player} (${teamName(k.teamId)})` : teamName(k.teamId);
@@ -152,34 +182,38 @@ export function liveAlerts(prev: LiveState | null, cur: LiveState, e: any, keyEv
         title: `${goalWord} ${teamName(k.teamId)}`,
         body: `${k.player ? `${k.player}${k.kind === "owngoal" ? (fr ? " (csc)" : " (en contra)") : ""}${at} · ` : ""}${score}`,
         url,
-        tag,
+        tag: nextTag(),
         kind: "goal",
       });
     else if (k.kind === "penalty")
-      out.push({ title: fr ? `⚽ But sur penalty ! ${teamName(k.teamId)}` : `⚽ ¡Gol de penal! ${teamName(k.teamId)}`, body: `${k.player}${at} · ${score}`, url, tag, kind: "goal" });
+      out.push({ title: fr ? `⚽ But sur penalty ! ${teamName(k.teamId)}` : `⚽ ¡Gol de penal! ${teamName(k.teamId)}`, body: `${k.player}${at} · ${score}`, url, tag: nextTag(), kind: "goal" });
     else if (k.kind === "penmiss")
-      out.push({ title: fr ? "❌ Penalty manqué" : "❌ Penal fallado", body: `${who}${at}`, url, tag, kind: "penalty" });
+      out.push({ title: fr ? "❌ Penalty manqué" : "❌ Penal fallado", body: `${who}${at}`, url, tag: nextTag(), kind: "penalty" });
     else if (k.kind === "red")
-      out.push({ title: fr ? "🟥 Carton rouge !" : "🟥 ¡Tarjeta roja!", body: `${who}${at}`, url, tag, kind: "red" });
+      out.push({ title: fr ? "🟥 Carton rouge !" : "🟥 ¡Tarjeta roja!", body: `${who}${at}`, url, tag: nextTag(), kind: "red" });
     else if (k.kind === "yellow")
-      out.push({ title: fr ? "🟨 Carton jaune" : "🟨 Tarjeta amarilla", body: `${who}${at}`, url, tag, kind: "yellow" });
+      out.push({ title: fr ? "🟨 Carton jaune" : "🟨 Tarjeta amarilla", body: `${who}${at}`, url, tag: nextTag(), kind: "yellow" });
     else if (k.kind === "secondhalf")
-      out.push({ title: fr ? "▶️ Reprise de la 2e mi-temps" : "▶️ Empieza el segundo tiempo", body: score, url, tag, kind: "secondhalf" });
+      out.push({ title: fr ? "▶️ Reprise de la 2e mi-temps" : "▶️ Empieza el segundo tiempo", body: score, url, tag: nextTag(), kind: "secondhalf" });
   }
 
   if (prev && prev.s === "in" && cur.s === "in") {
     const ph = Number(prev.h ?? 0), pa = Number(prev.a ?? 0), ch = Number(cur.h ?? 0), ca = Number(cur.a ?? 0);
     // Respaldo: si la fuente no publicó la incidencia, el cambio de marcador basta.
-    if (!goalsFromEvents && (ch > ph || ca > pa)) {
+    // Solo si el marcador supera los goles ya avisados por incidencia (evita el aviso doble).
+    const announced = Math.max(ph + pa, cur.gk ?? 0);
+    if (scoreAlerts && ch + ca > announced && (ch - ph >= minDelta || ca - pa >= minDelta)) {
       const who = ch > ph ? h : a;
-      out.push({ title: `${goalWord} ${who}`, body: `${score}${clock}`, url, tag, kind: "goal" });
+      out.push({ title: `${goalWord} ${who}`, body: `${score}${clock}`, url, tag: nextTag(), kind: "goal" });
     }
-    if (!prev.ht && cur.ht) out.push({ title: fr ? "⏸️ Mi-temps" : "⏸️ Entretiempo", body: score, url, tag, kind: "halftime" });
+    if (!prev.ht && cur.ht) out.push({ title: fr ? "⏸️ Mi-temps" : "⏸️ Entretiempo", body: score, url, tag: nextTag(), kind: "halftime" });
     if (prev.ht && !cur.ht && !fresh.some((k) => k.kind === "secondhalf"))
-      out.push({ title: fr ? "▶️ Reprise de la 2e mi-temps" : "▶️ Empieza el segundo tiempo", body: score, url, tag, kind: "secondhalf" });
+      out.push({ title: fr ? "▶️ Reprise de la 2e mi-temps" : "▶️ Empieza el segundo tiempo", body: score, url, tag: nextTag(), kind: "secondhalf" });
   }
   if (prev && prev.s !== "post" && cur.s === "post") {
-    out.push({ title: fr ? "🏁 Coup de sifflet final" : "🏁 Pitazo final", body: score, url, tag, kind: "final" });
+    const pens = e.home?.pen !== undefined && e.away?.pen !== undefined ? ` · ${fr ? "t.a.b." : "penales"} ${e.home.pen}-${e.away.pen}` : "";
+    const aet = !pens && e.statusDetail === "AET" ? ` (${fr ? "a.p." : "alargue"})` : "";
+    out.push({ title: fr ? "🏁 Coup de sifflet final" : "🏁 Pitazo final", body: `${score}${aet}${pens}`, url, tag: nextTag(), kind: "final" });
   }
   return out;
 }
@@ -211,16 +245,23 @@ export function f1Alerts(prevState: any, sessionKey: string, start: string, race
       kind: "lights",
     });
   }
-  if (!state.done && winner && (sessionKey === "race" || sessionKey === "sprint")) {
+  if (!state.done && winner) {
     state.done = true;
+    const isRace = sessionKey === "race" || sessionKey === "sprint";
     out.push({
-      title: fr ? `🏆 ${winner} remporte la ${sessionKey === "race" ? "course" : "sprint"} !` : `🏆 ¡${winner} gana la ${sessionKey === "race" ? "carrera" : "sprint"}!`,
-      body: raceName,
+      title: isRace
+        ? fr
+          ? `🏆 ${winner} remporte ${sessionKey === "race" ? "la course" : "le sprint"} !`
+          : `🏆 ¡${winner} gana la ${sessionKey === "race" ? "carrera" : "sprint"}!`
+        : fr
+          ? `⏱️ Pole position pour ${winner}`
+          : `⏱️ Pole position para ${winner}`,
+      body: `${raceName} · ${name}`,
       url,
       tag: `f1-${raceName}-${sessionKey}-end`,
       kind: "checkered",
     });
   }
-  if (now - t0 > 4 * 3600000) state.done = true;
+  if (now - t0 > 30 * 3600000) state.done = true;
   return { alerts: out, state };
 }

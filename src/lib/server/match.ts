@@ -50,10 +50,23 @@ function side(c: any) {
     logo: c.team?.logos?.[0]?.href ?? c.team?.logo,
     color: c.team?.color,
     score: c.score,
+    pen: c.shootoutScore !== undefined && c.shootoutScore !== null ? String(c.shootoutScore) : undefined,
     winner: c.winner,
     record: c.record?.[0]?.summary ?? c.records?.[0]?.summary,
     linescores: (c.linescores ?? []).map((l: any) => String(l.displayValue ?? l.value ?? "")),
   };
+}
+
+function rugbyKind(t: string): string | null {
+  if (t.includes("penalty try")) return "try";
+  if (t.includes("try")) return "try";
+  if (t.includes("conversion")) return t.includes("miss") ? null : "conversion";
+  if (t.includes("drop")) return "dropgoal";
+  if (t.includes("penalty goal") || (t.includes("penalty") && t.includes("kick"))) return "penaltykick";
+  if (t.includes("red card")) return "red";
+  if (t.includes("yellow")) return "yellow";
+  if (t.includes("substitution") || t.includes("replacement")) return "sub";
+  return null;
 }
 
 function soccerKind(t: string, k: any): string | null {
@@ -90,11 +103,11 @@ export async function matchDetail(league: string, id: string) {
   const timeline: TimelineItem[] = [];
   for (const k of d.keyEvents ?? []) {
     const t = text(k.type?.text ?? k.type?.type);
-    const kind = soccerKind(t, k);
+    const kind = sport === "rugby" ? rugbyKind(t) : soccerKind(t, k);
     if (!kind) continue;
     const parts: any[] = k.participants ?? [];
     timeline.push({
-      kind,
+      kind: Number(k.period?.number ?? 0) >= 5 && (kind === "penalty" || kind === "penmiss" || kind === "goal") ? (kind === "penmiss" ? "soMiss" : "soGoal") : kind,
       clock: k.clock?.displayValue ?? "",
       period: k.period?.number,
       teamId: String(k.team?.id ?? ""),
@@ -215,18 +228,26 @@ export async function matchDetail(league: string, id: string) {
   }
 
   // --- Forma reciente ---
-  const form: Record<string, { result: string; opp: string; score: string; date: string; home: boolean }[]> = {};
+  const form: Record<string, { result: string; opp: string; score: string; date: string; home: boolean; gf?: number; ga?: number }[]> = {};
   const formSrc: any[] = [d.boxscore?.form, d.lastFiveGames, d.boxscore?.lastFiveGames].find((x: any) => Array.isArray(x) && x.length) ?? [];
   for (const b of formSrc) {
     const tid = String(b.team?.id ?? "");
     form[tid] = (b.events ?? [])
-      .map((e: any) => ({
-        result: String(e.gameResult ?? "").toUpperCase(),
-        opp: e.opponent?.displayName ?? e.opponent?.abbreviation ?? "",
-        score: String(e.score ?? (e.homeTeamScore !== undefined ? `${e.homeTeamScore}-${e.awayTeamScore}` : "")),
-        date: e.gameDate ?? "",
-        home: String(e.atVs ?? "") === "vs",
-      }))
+      .map((e: any) => {
+        // Goles desde la perspectiva del equipo (no del local), cuando la fuente lo permite.
+        const isHome = e.homeTeamId !== undefined ? String(e.homeTeamId) === tid : String(e.atVs ?? "") === "vs";
+        const hs = Number(e.homeTeamScore), as = Number(e.awayTeamScore);
+        const known = Number.isFinite(hs) && Number.isFinite(as);
+        return {
+          result: String(e.gameResult ?? "").toUpperCase(),
+          opp: e.opponent?.displayName ?? e.opponent?.abbreviation ?? "",
+          gf: known ? (isHome ? hs : as) : undefined,
+          ga: known ? (isHome ? as : hs) : undefined,
+          score: known ? `${isHome ? hs : as}-${isHome ? as : hs}` : String(e.score ?? ""),
+          date: e.gameDate ?? "",
+          home: isHome,
+        };
+      })
       .sort((x: any, y: any) => String(y.date).localeCompare(String(x.date)))
       .slice(0, 5);
   }

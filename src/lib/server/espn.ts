@@ -32,11 +32,17 @@ function mapStatus(st: any, sport = "football"): { status: EventStatus; detail?:
   if (name.includes("POSTPONED")) return { status: "cancelled", detail: "postponed" };
   if (name.includes("CANCELED") || name.includes("CANCELLED") || name.includes("ABANDONED"))
     return { status: "cancelled", detail: "cancelled" };
-  if (name.includes("HALFTIME")) return { status: "in", detail: "HT" };
+  if (name.includes("SUSPENDED")) return { status: "in", detail: "SUSP" };
+  // Descanso del medio tiempo (no el de la prórroga, que sigue siendo "en juego").
+  if (name.includes("HALFTIME") && !name.includes("ET")) return { status: "in", detail: "HT" };
   const state = type.state;
-  // Fútbol y rugby: el minuto ("67'"). Otros deportes: el periodo completo ("Q3 5:32", "2nd 10:14").
-  if (state === "in") return { status: "in", detail: liveDetail(st, sport) };
-  if (state === "post") return { status: "post", detail: type.shortDetail };
+  if (state === "in") {
+    if (name.includes("SHOOTOUT")) return { status: "in", detail: "PEN" };
+    if (name.includes("END_OF_REGULATION") || name.includes("END_OF_EXTRATIME")) return { status: "in", detail: "BRK" };
+    return { status: "in", detail: liveDetail(st, sport) };
+  }
+  // Final con prórroga o penales: se indica (en códigos neutros, la app los traduce).
+  if (state === "post") return { status: "post", detail: /PEN|SHOOTOUT/.test(name) ? "PEN" : /AET|OT|EXTRA/.test(name) ? "AET" : undefined };
   return { status: "pre" };
 }
 
@@ -127,6 +133,7 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
         short: shortName(h.team),
         logo: logoOf(h.team),
         score: status === "pre" ? undefined : h.score,
+        pen: h.shootoutScore !== undefined && h.shootoutScore !== null ? String(h.shootoutScore) : undefined,
         winner: h.winner,
       },
       away: {
@@ -135,6 +142,7 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
         short: shortName(a.team),
         logo: logoOf(a.team),
         score: status === "pre" ? undefined : a.score,
+        pen: a.shootoutScore !== undefined && a.shootoutScore !== null ? String(a.shootoutScore) : undefined,
         winner: a.winner,
       },
       venue: comp.venue?.fullName,
@@ -180,6 +188,11 @@ export async function teamStandings(league: string): Promise<Standings | null> {
   }));
   if (meta.sport === "hockey") rows.sort((a, b) => b.points - a.points || (b.won ?? 0) - (a.won ?? 0)).forEach((r, i) => (r.rank = i + 1));
   else if (isNBA) rows.sort((a, b) => b.points - a.points || (a.lost ?? 0) - (b.lost ?? 0)).forEach((r, i) => (r.rank = i + 1));
+  else if (rows.some((r) => !r.rank))
+    // Sin posición informada: se ordena por puntos, diferencia y goles a favor.
+    rows
+      .sort((a, b) => b.points - a.points || (b.won ?? 0) - (a.won ?? 0) || (b.diff ?? 0) - (a.diff ?? 0) || (b.gf ?? 0) - (a.gf ?? 0))
+      .forEach((r, i) => (r.rank = i + 1));
   else rows.sort((a, b) => a.rank - b.rank);
   return {
     competitionId: league,
@@ -278,8 +291,17 @@ export async function searchAthletes(q: string) {
 export async function eventDetail(league: string, id: string, day: string) {
   const meta = leagueMeta(league);
   if (!meta || !/^\d{8}$/.test(day)) return null;
-  const d = await getJson<any>(`${SITE}/${meta.path}/scoreboard?dates=${day}`, 60);
-  const ev = (d?.events ?? []).find((e: any) => String(e.id) === id);
+  // ESPN agrupa por fecha de EE. UU.: si no aparece ese día, se prueban el anterior y el siguiente.
+  const shift = (n: number) => {
+    const t = new Date(Date.UTC(+day.slice(0, 4), +day.slice(4, 6) - 1, +day.slice(6, 8) + n));
+    return t.toISOString().slice(0, 10).replace(/-/g, "");
+  };
+  let ev: any = null;
+  for (const dd of [day, shift(-1), shift(1)]) {
+    const d = await getJson<any>(`${SITE}/${meta.path}/scoreboard?dates=${dd}`, 60);
+    ev = (d?.events ?? []).find((e: any) => String(e.id) === id);
+    if (ev) break;
+  }
   if (!ev) return null;
   const comps: any[] = ev.competitions ?? [];
   const athlete = (c: any) => ({

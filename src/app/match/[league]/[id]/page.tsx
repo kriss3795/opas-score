@@ -80,7 +80,12 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
   const sport = m.sport as string;
   const live = m.state === "in";
   const ht = m.statusName?.includes("HALFTIME");
-  const clockText = ["football", "rugby"].includes(sport) ? m.clock : m.detail;
+  const SPECIAL: Record<string, string> = {
+    PEN: fr ? "Tirs au but" : "Penales",
+    BRK: fr ? "Pause" : "Pausa",
+    SUSP: fr ? "Interrompu" : "Suspendido",
+  };
+  const clockText = SPECIAL[m.detail] ?? (["football", "rugby"].includes(sport) ? m.clock : m.detail);
   const status = live ? (ht ? t("halftime") : clockText) : m.state === "post" ? t("final") : m.start ? `${fmtDay(m.start, lang)} · ${fmtTime(m.start, lang)}` : "";
 
   if (sofa)
@@ -135,6 +140,11 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
           </div>
           <TeamHead s={m.away} />
         </div>
+        {m.home?.pen !== undefined && m.away?.pen !== undefined && (
+          <div className="font-score mt-1 text-lg font-bold text-muted">
+            ({m.home.pen}-{m.away.pen} {fr ? "t.a.b." : "pen."})
+          </div>
+        )}
         <div className={`mt-3 flex items-center justify-center gap-2 text-sm font-bold ${live ? "text-live" : "text-muted"}`}>
           {live && <span className="live-dot h-2 w-2 rounded-full bg-live" />}
           {m.state === "pre" && m.start ? fmtDay(m.start, lang) : status}
@@ -191,15 +201,15 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
 
       {tab === "summary" && (
         <>
-          {m.elo && m.home && m.away && <EloBar elo={m.elo} home={m.home.name} away={m.away.name} />}
+          {m.elo && m.home && m.away && <EloBar elo={m.elo} home={m.home.name} away={m.away.name} prematch={m.state !== "pre"} />}
           <FactsCard facts={facts} />
           <Timeline m={m} teamOf={teamOf} />
-          {m.teamStats?.length > 0 && <StatsBars stats={m.teamStats.slice(0, 6)} sport={sport} />}
+          {m.teamStats?.length > 0 && <StatsBars stats={m.teamStats.slice(0, 6)} sport={sport} season={m.state === "pre"} />}
           <Leaders m={m} teamOf={teamOf} />
           <Info m={m} />
         </>
       )}
-      {tab === "stats" && <StatsBars stats={m.teamStats} sport={sport} all />}
+      {tab === "stats" && <StatsBars stats={m.teamStats} sport={sport} all season={m.state === "pre"} />}
       {tab === "lineups" && <Lineups m={m} teamOf={teamOf} />}
       {tab === "players" && <Boxscore m={m} teamOf={teamOf} />}
       {tab === "preview" && <Preview m={m} />}
@@ -290,6 +300,9 @@ const ICON: Record<string, string> = {
   dropgoal: "🦶",
   score: "🔥",
   penaltybox: "⏱️",
+  penaltykick: "🎯",
+  soGoal: "✅",
+  soMiss: "❌",
 };
 
 function Timeline({ m, teamOf }: { m: any; teamOf: (id: string) => any }) {
@@ -315,6 +328,12 @@ function Timeline({ m, teamOf }: { m: any; teamOf: (id: string) => any }) {
         return "Drop";
       case "penaltybox":
         return fr ? "Pénalité" : "Penalización";
+      case "penaltykick":
+        return fr ? "Pénalité réussie" : "Penal convertido";
+      case "soGoal":
+        return fr ? "Tir au but réussi" : "Penal convertido (tanda)";
+      case "soMiss":
+        return fr ? "Tir au but manqué" : "Penal fallado (tanda)";
       case "score":
         return scoreTypeLabel(x.detail, lang);
       default:
@@ -357,7 +376,7 @@ function Timeline({ m, teamOf }: { m: any; teamOf: (id: string) => any }) {
   );
 }
 
-function StatsBars({ stats, sport, all }: { stats: any[]; sport: string; all?: boolean }) {
+function StatsBars({ stats, sport, all, season }: { stats: any[]; sport: string; all?: boolean; season?: boolean }) {
   const { lang } = useApp();
   if (!stats?.length) return null;
   const num = (v: string) => {
@@ -365,7 +384,19 @@ function StatsBars({ stats, sport, all }: { stats: any[]; sport: string; all?: b
     return Number.isFinite(x) ? x : 0;
   };
   return (
-    <Card title={all ? undefined : lang === "fr" ? "Statistiques" : "Estadísticas"}>
+    <Card
+      title={
+        season
+          ? lang === "fr"
+            ? "Statistiques de la saison"
+            : "Estadísticas de la temporada"
+          : all
+            ? undefined
+            : lang === "fr"
+              ? "Statistiques"
+              : "Estadísticas"
+      }
+    >
       <ul className="space-y-3">
         {stats.map((s: any) => {
           const h = num(s.home);

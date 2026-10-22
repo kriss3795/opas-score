@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildAgenda, queryFromPrefs } from "./agenda";
 import { sportMeta } from "../catalog";
+import { gpName } from "../f1names";
 import type { SportEvent } from "../types";
 
 // Todo lo que el usuario sigue (equipos, jugadores, tenistas, F1) queda con avisos activados
@@ -16,7 +17,7 @@ function nameOf(e: SportEvent, lang: "fr" | "es") {
       quali: { fr: "Qualifications", es: "Clasificación" },
       sq: { fr: "Qualifs sprint", es: "Clasificación sprint" },
     };
-    return `${e.competitionName} · ${lbl[e.title ?? "race"]?.[lang] ?? ""}`;
+    return `${gpName(e.competitionName, lang)} · ${lbl[e.title ?? "race"]?.[lang] ?? ""}`;
   }
   if (e.home && e.away) return `${e.home.short ?? e.home.name} – ${e.away.short ?? e.away.name}`;
   return e.title ?? e.competitionName;
@@ -41,7 +42,7 @@ export async function autoFollow(db: SupabaseClient) {
         return {
           endpoint: s.endpoint,
           event_id: e.id,
-          title: e.sport === "f1" ? `🏎️ ${e.competitionName}` : `${sportMeta(e.sport).emoji} Opa's Score`,
+          title: e.sport === "f1" ? `🏎️ ${gpName(e.competitionName, lang)}` : `${sportMeta(e.sport).emoji} Opa's Score`,
           body: lang === "fr" ? `Dans {min} min : ${name}` : `En {min} min: ${name}`,
           url: e.link ?? "/",
           start_at: e.start,

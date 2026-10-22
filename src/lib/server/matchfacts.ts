@@ -29,13 +29,20 @@ export async function matchFacts(m: Detail, followed: string[]): Promise<Fact[]>
     // Prioridad: jugadores seguidos y líderes; máximo 10 consultas.
     uniq.sort((a, b) => Number(followed.includes(b.name)) - Number(followed.includes(a.name)));
     const checks = await Promise.all(
-      uniq.slice(0, 10).map(async (c) => ({ c, h: await clubHistory(c.name).catch(() => null) })),
+      uniq.slice(0, 10).map(async (c) => {
+        const own = teams.find((x) => x.id === c.teamId);
+        // Homónimos (p. ej. dos "Vitinha"): se exige que Wikidata confirme su club actual.
+        const h = own
+          ? await clubHistory(c.name, (clubs) => clubs.some((s) => !s.to && sameClub(s, own.name, m.league))).catch(() => null)
+          : null;
+        return { c, h };
+      }),
     );
     for (const { c, h } of checks) {
       if (!h) continue;
       const rival = other(c.teamId);
       // Solo etapas terminadas (con año de salida): evita errores si Wikidata no registró un traspaso reciente.
-      const spell = h.clubs.find((s) => s.to && sameClub(s.label, rival.name));
+      const spell = h.clubs.find((s) => s.to && sameClub(s, rival.name, m.league));
       if (!spell) continue;
       const yFr = spell.from ? ` (${spell.to ? `${spell.from}-${spell.to}` : `depuis ${spell.from}`})` : "";
       const yEs = spell.from ? ` (${spell.to ? `${spell.from}-${spell.to}` : `desde ${spell.from}`})` : "";
@@ -174,15 +181,13 @@ export async function matchFacts(m: Detail, followed: string[]): Promise<Fact[]>
       const f = m.form[t.id] ?? [];
       let gf = 0, ga = 0, clean = 0, blank = 0, valid = 0;
       for (const g of f) {
-        const [a, b] = g.score.split("-").map(Number);
-        if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+        // Solo con goles confirmados desde la perspectiva del equipo.
+        if (g.gf === undefined || g.ga === undefined) continue;
         valid++;
-        // ESPN da el marcador local-visitante; se ubica a nuestro equipo con atVs.
-        const mine = g.home ? a : b, theirs = g.home ? b : a;
-        gf += mine;
-        ga += theirs;
-        if (theirs === 0) clean++;
-        if (mine === 0) blank++;
+        gf += g.gf;
+        ga += g.ga;
+        if (g.ga === 0) clean++;
+        if (g.gf === 0) blank++;
       }
       return { t, gf, ga, clean, blank, valid };
     });

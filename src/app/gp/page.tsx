@@ -7,6 +7,7 @@ import { F1_TV_FR } from "@/lib/catalog";
 import { sessionLabel } from "@/components/EventCard";
 import { IconTv } from "@/components/Icons";
 import { FactsCard } from "@/components/Facts";
+import { gpName } from "@/lib/f1names";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -81,7 +82,7 @@ export default function GPPage() {
           <div className="text-xs font-bold tracking-wider text-text/70 uppercase">
             {t("round")} {cur.round} · {cur.season}
           </div>
-          <h2 className="mt-1 text-3xl leading-tight font-extrabold">{cur.name}</h2>
+          <h2 className="mt-1 text-3xl leading-tight font-extrabold">{gpName(cur.name, lang)}</h2>
           <p className="mt-1 text-text/80">
             {cur.circuit}
             {cur.locality ? ` · ${cur.locality}` : ""}
@@ -235,7 +236,7 @@ export default function GPPage() {
       {d.last?.rows?.length > 0 && (
         <section className="rounded-3xl bg-card p-4">
           <h3 className="font-bold">{t("lastRace")}</h3>
-          <p className="mb-3 text-sm text-muted">{d.last.name}</p>
+          <p className="mb-3 text-sm text-muted">{gpName(d.last.name, lang)}</p>
           <ol>
             {d.last.rows.slice(0, 10).map((r: any) => (
               <li key={r.driverId} className={`flex items-center gap-3 border-b border-line px-1 py-2 last:border-0 ${favDrivers.has(r.driverId) ? "bg-f1/10" : ""}`}>

@@ -84,13 +84,31 @@ async function resultOfSource(key: string): Promise<any | null> {
   if (kind === "fb") {
     const d = await eventSummary(a, b, 600);
     const comp = d?.header?.competitions?.[0];
-    if (comp?.status?.type?.state !== "post") return null;
+    const type = comp?.status?.type ?? {};
+    const name = String(type.name ?? "");
+    // Aplazado, suspendido o cancelado: el pronóstico y la apuesta quedan anulados (no es un 0-0).
+    if (/POSTPONED|CANCELED|CANCELLED|ABANDONED|FORFEIT/.test(name)) return { void: true };
+    if (type.state !== "post") return null;
     const cs: any[] = comp.competitors ?? [];
     const h = cs.find((c) => c.homeAway === "home");
     const w = cs.find((c) => c.homeAway === "away");
-    const hs = Number(h?.score);
-    const as = Number(w?.score);
-    return Number.isFinite(hs) && Number.isFinite(as) ? { h: hs, a: as } : null;
+    let hs = Number(h?.score);
+    let as = Number(w?.score);
+    if (!Number.isFinite(hs) || !Number.isFinite(as)) return null;
+    // Regla de apuestas: se cuenta el resultado a los 90 minutos (sin prórroga ni penales).
+    if (/AET|PEN|SHOOTOUT|EXTRA/.test(name)) {
+      for (const k of d?.keyEvents ?? []) {
+        const per = Number(k.period?.number ?? 0);
+        if (per !== 3 && per !== 4) continue; // solo goles de la prórroga
+        const t = String(k.type?.text ?? "").toLowerCase();
+        if (!(k.scoringPlay || t.startsWith("goal") || (t.includes("penalty") && t.includes("scored")))) continue;
+        if (t.includes("own goal")) return { void: true }; // atribución ambigua: mejor anular que equivocarse
+        if (String(k.team?.id) === String(h?.team?.id ?? h?.id)) hs--;
+        else if (String(k.team?.id) === String(w?.team?.id ?? w?.id)) as--;
+      }
+      if (hs !== as || hs < 0) return { void: true }; // datos incoherentes: se anula
+    }
+    return { h: hs, a: as };
   }
   if (kind === "f1") {
     const d = await getJson<any>(`https://api.jolpi.ca/ergast/f1/${a}/${b}/results.json?limit=3`, 3600);
@@ -124,7 +142,10 @@ async function resultsFor(keys: string[]): Promise<Map<string, any>> {
   return out;
 }
 
+export const isVoid = (r: any) => Boolean(r?.void);
+
 export function score(key: string, pred: any, res: any): number {
+  if (isVoid(res)) return 0;
   if (key.startsWith("fb|")) {
     if (pred.h === res.h && pred.a === res.a) return 3;
     return Math.sign(pred.h - pred.a) === Math.sign(res.h - res.a) ? 1 : 0;
@@ -166,7 +187,7 @@ export async function leagueState(code: string, token?: string) {
       hits = 0;
     for (const p of mine) {
       const r = results.get(p.event_key);
-      if (!r) continue;
+      if (!r || isVoid(r)) continue; // anulado: no cuenta para el porcentaje de acierto
       const s = score(p.event_key, p.value, r);
       points += s;
       scored++;
@@ -182,7 +203,8 @@ export async function leagueState(code: string, token?: string) {
         .filter((p) => p.member_id === me.id)
         .map((p) => {
           const r = results.get(p.event_key);
-          return { key: p.event_key, value: p.value, label: p.label, start: p.start_at, result: r ?? null, points: r ? score(p.event_key, p.value, r) : null };
+          const v = isVoid(r);
+          return { key: p.event_key, value: p.value, label: p.label, start: p.start_at, result: r && !v ? r : null, voided: v, points: r && !v ? score(p.event_key, p.value, r) : null };
         })
         .sort((a, b) => String(b.start).localeCompare(String(a.start)))
     : [];
@@ -234,9 +256,9 @@ export async function leagueState(code: string, token?: string) {
         .filter((b) => b.member_id === me.id)
         .map((b) => {
           const r = results.get(b.event_key);
-          const out = r ? outcome(r) : null;
-          const voided = !r && b.start_at && Date.now() - new Date(b.start_at).getTime() > 3 * 86400000;
-          return { key: b.event_key, pick: b.pick, stake: b.stake, odds: Number(b.odds), label: b.label, start: b.start_at, result: r ?? null, won: out ? out === b.pick : null, voided };
+          const out = r && !isVoid(r) ? outcome(r) : null;
+          const voided = isVoid(r) || (!r && b.start_at && Date.now() - new Date(b.start_at).getTime() > 3 * 86400000);
+          return { key: b.event_key, pick: b.pick, stake: b.stake, odds: Number(b.odds), label: b.label, start: b.start_at, result: r && !isVoid(r) ? r : null, won: out ? out === b.pick : null, voided };
         })
         .sort((a, b) => String(b.start).localeCompare(String(a.start)))
     : [];
@@ -277,6 +299,7 @@ export function wallet(memberId: string, bets: any[], results: Map<string, any>)
       if (!stale) pending += b.stake;
       continue;
     }
+    if (isVoid(r)) continue; // partido anulado: se devuelven las fichas
     balance += outcome(r) === b.pick ? Math.round(b.stake * Number(b.odds)) - b.stake : -b.stake;
   }
   return { balance, pending, available: balance - pending };

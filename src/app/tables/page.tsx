@@ -47,13 +47,26 @@ export default function TablesPage() {
   const byWins = ["basketball", "nfl", "baseball"].includes(sport);
   const favNames = useMemo(() => new Set(prefs.teams.map((x) => x.name)), [prefs.teams]);
 
+  // Si deja de seguir la liga elegida, se vuelve a la primera disponible.
+  useEffect(() => {
+    if (!options.some((l) => l.id === sel)) setSel(options[0]?.id);
+  }, [options, sel]);
+
   useEffect(() => {
     if (!sel) return;
+    let alive = true;
     setData(undefined);
     fetch(`/api/standings?league=${sel}`)
       .then((r) => r.json())
-      .then((d) => setData(d.standings ?? null))
-      .catch(() => setData(null));
+      .then((d) => {
+        if (alive) setData(d.standings ?? null);
+      })
+      .catch(() => {
+        if (alive) setData(null);
+      });
+    return () => {
+      alive = false;
+    };
   }, [sel]);
 
   const notes = useMemo(() => {
