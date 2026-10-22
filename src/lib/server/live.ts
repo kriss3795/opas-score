@@ -1,5 +1,6 @@
 import "server-only";
 import { teamScoreboard, eventSummary } from "./espn";
+import { getJson } from "./http";
 import { leagueMeta } from "../catalog";
 import type { PushPayload } from "./push";
 
@@ -46,10 +47,65 @@ function parseKeyEvents(d: any): KeyEv[] {
   return out;
 }
 
+// Tenis: estado de un partido (sets) leído del marcador del circuito.
+async function tennisState(league: string, eventId: string) {
+  const tour = league.split(".")[1];
+  const compId = eventId.replace(/^tennis-/, "");
+  const d = await getJson<any>(`https://site.api.espn.com/apis/site/v2/sports/tennis/${tour}/scoreboard`, 30);
+  for (const ev of d?.events ?? []) {
+    for (const g of ev.groupings ?? []) {
+      for (const c of g.competitions ?? []) {
+        if (String(c.id) !== compId) continue;
+        const cs: any[] = c.competitors ?? [];
+        const [a, b] = [cs.find((x) => x.order === 1) ?? cs[0], cs.find((x) => x.order === 2) ?? cs[1]];
+        const sets = (x: any) => (x?.linescores ?? []).map((l: any) => Number(l.value ?? 0));
+        const st = c.status?.type?.state ?? "pre";
+        const e = {
+          id: eventId,
+          sport: "tennis",
+          start: c.date,
+          statusDetail: c.status?.type?.shortDetail,
+          competitionName: ev.name,
+          home: { id: String(a?.id ?? ""), name: a?.athlete?.displayName ?? "?", winner: a?.winner },
+          away: { id: String(b?.id ?? ""), name: b?.athlete?.displayName ?? "?", winner: b?.winner },
+        };
+        return { e, keyEvents: [] as KeyEv[], state: { s: st, h: sets(a).join(","), a: sets(b).join(",") } as LiveState };
+      }
+    }
+  }
+  return null;
+}
+
+// Tenis: inicio, cada set terminado y ganador del partido.
+export function tennisAlerts(prev: LiveState | null, cur: LiveState, e: any, lang: "fr" | "es", url: string): PushPayload[] {
+  const fr = lang === "fr";
+  const out: PushPayload[] = [];
+  const tag = `live-${e.id}`;
+  const A = e.home.name, B = e.away.name;
+  const sa = (cur.h ?? "").split(",").filter(Boolean).map(Number);
+  const sb = (cur.a ?? "").split(",").filter(Boolean).map(Number);
+  const score = sa.map((x, i) => `${x}-${sb[i] ?? 0}`).join(" ");
+  if ((!prev || prev.s === "pre") && cur.s === "in" && Date.now() - new Date(e.start).getTime() < 30 * 60000)
+    out.push({ title: fr ? "🎾 Début du match" : "🎾 Empieza el partido", body: `${A} – ${B} · ${e.competitionName}`, url, tag, kind: "start" });
+  const prevSets = (prev?.h ?? "").split(",").filter(Boolean).length;
+  if (prev && cur.s === "in" && sa.length > prevSets && prevSets > 0) {
+    // Un set nuevo empezó: el anterior terminó.
+    const i = prevSets - 1;
+    const winner = (sa[i] ?? 0) > (sb[i] ?? 0) ? A : B;
+    out.push({ title: fr ? `🎾 Set pour ${winner}` : `🎾 Set para ${winner}`, body: `${A} ${score} ${B}`, url, tag, kind: "goal" });
+  }
+  if (prev && prev.s !== "post" && cur.s === "post") {
+    const w = e.home.winner ? A : e.away.winner ? B : "";
+    out.push({ title: fr ? `🏆 ${w} gagne !` : `🏆 ¡Gana ${w}!`, body: `${A} ${score} ${B}`, url, tag, kind: "final" });
+  }
+  return out;
+}
+
 // Estado actual (real) de un partido seguido, leído de ESPN.
 export async function eventState(league: string, eventId: string, start: string) {
   const meta = leagueMeta(league);
   if (!meta) return null;
+  if (meta.kind === "tennis") return tennisState(league, eventId);
   // ESPN agrupa los partidos por día de EE. UU.: se mira también el día anterior.
   const d = new Date(start);
   const evs = await teamScoreboard(league, new Date(d.getTime() - 86400000), d);

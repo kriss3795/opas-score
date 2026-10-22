@@ -53,6 +53,8 @@ export interface StandingRow {
   drawn?: number;
   lost?: number;
   diff?: number;
+  gf?: number; // goles/puntos a favor
+  ga?: number; // en contra
   points: number;
   note?: { color?: string; description?: string };
 }

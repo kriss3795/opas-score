@@ -9,6 +9,23 @@ const V2 = "https://site.api.espn.com/apis/v2/sports";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// Detalle en vivo sin palabras en inglés: minuto, cuarto, periodo, entrada o set.
+export function liveDetail(st: any, sport: string): string | undefined {
+  const type = st?.type ?? {};
+  const clock = st?.displayClock && st.displayClock !== "0:00" ? st.displayClock : "";
+  const p = Number(st?.period ?? 0);
+  if (sport === "football" || sport === "rugby") return st?.displayClock || undefined;
+  if (sport === "tennis") return p ? `Set ${p}` : undefined;
+  if (sport === "baseball") {
+    const d = String(type.shortDetail ?? type.detail ?? "");
+    const half = /^top/i.test(d) ? "▲" : /^bot/i.test(d) ? "▼" : /^mid/i.test(d) ? "◆" : /^end/i.test(d) ? "■" : "";
+    return p ? `${half}${p}` : undefined;
+  }
+  if (sport === "hockey") return p ? `P${p > 3 ? "OT" : p}${clock ? ` ${clock}` : ""}` : undefined;
+  if (["basketball", "nfl", "afl"].includes(sport)) return p ? `${p > 4 ? "OT" : `Q${p}`}${clock ? ` ${clock}` : ""}` : undefined;
+  return clock || undefined;
+}
+
 function mapStatus(st: any, sport = "football"): { status: EventStatus; detail?: string } {
   const type = st?.type ?? {};
   const name: string = type.name ?? "";
@@ -18,8 +35,7 @@ function mapStatus(st: any, sport = "football"): { status: EventStatus; detail?:
   if (name.includes("HALFTIME")) return { status: "in", detail: "HT" };
   const state = type.state;
   // Fútbol y rugby: el minuto ("67'"). Otros deportes: el periodo completo ("Q3 5:32", "2nd 10:14").
-  if (state === "in")
-    return { status: "in", detail: sport === "football" || sport === "rugby" ? st?.displayClock || type.shortDetail : type.shortDetail || st?.displayClock };
+  if (state === "in") return { status: "in", detail: liveDetail(st, sport) };
   if (state === "post") return { status: "post", detail: type.shortDetail };
   return { status: "pre" };
 }
@@ -122,7 +138,7 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
         winner: a.winner,
       },
       venue: comp.venue?.fullName,
-      link: meta?.sport === "basketball" ? undefined : `/match/${league}/${ev.id}`,
+      link: `/match/${league}/${ev.id}`,
       source: "ESPN",
     });
   }
@@ -157,6 +173,8 @@ export async function teamStandings(league: string): Promise<Standings | null> {
     drawn: stat(e, "ties"),
     lost: stat(e, "losses"),
     diff: stat(e, "pointDifferential") ?? stat(e, "differential"),
+    gf: stat(e, "pointsFor"),
+    ga: stat(e, "pointsAgainst"),
     points: isNBA ? stat(e, "wins") ?? 0 : stat(e, "points") ?? 0,
     note: !usSport && e.note ? { color: e.note.color, description: e.note.description } : undefined,
   }));
@@ -368,6 +386,7 @@ export async function tennisMatches(
           status,
           statusDetail: detail,
           round: c.round?.displayName,
+          link: `/tennis/${tour}/${c.id}`,
           home: side(a),
           away: side(b),
           venue: c.venue?.fullName,

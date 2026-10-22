@@ -2,8 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supa, sendPush, lastPushError } from "@/lib/server/push";
 import { isMorning, localDate, morningSummary } from "@/lib/server/morning";
-import { eventState, liveAlerts, f1Alerts } from "@/lib/server/live";
+import { eventState, liveAlerts, f1Alerts, tennisAlerts } from "@/lib/server/live";
 import { getJson } from "@/lib/server/http";
+import { autoFollow } from "@/lib/server/autofollow";
 
 export const maxDuration = 60;
 
@@ -30,6 +31,13 @@ async function run(req: NextRequest) {
   if (!db) return NextResponse.json({ ok: false, error: "db" }, { status: 503 });
 
   const now = Date.now();
+  const t0 = Date.now();
+
+  // Seguimiento automático de favoritos (cada 3 minutos para no recargar la fuente).
+  let autoAdded = 0;
+  if (new Date().getMinutes() % 3 === 0 || req.nextUrl.searchParams.get("auto") === "1") {
+    autoAdded = await autoFollow(db).catch(() => 0);
+  }
   const until = new Date(now + 15 * 60000).toISOString();
   const since = new Date(now - 10 * 60000).toISOString(); // no avisar eventos ya empezados hace rato
 
@@ -44,7 +52,6 @@ async function run(req: NextRequest) {
 
   let sent = 0;
   const failures: string[] = [];
-  const t0 = Date.now();
   for (const r of due ?? []) {
     const { data: s } = await db.from("push_subs").select("sub").eq("endpoint", r.endpoint).maybeSingle();
     if (!s) {
@@ -85,7 +92,10 @@ async function run(req: NextRequest) {
       const { data: subRow } = await db.from("push_subs").select("sub, lang").eq("endpoint", f.endpoint).maybeSingle();
       if (!subRow) continue;
       const mine = { ...st.state };
-      const alerts = liveAlerts(prev, mine, st.e, st.keyEvents, subRow.lang === "es" ? "es" : "fr", f.url ?? "/");
+      const lng = subRow.lang === "es" ? "es" : "fr";
+      const alerts = String(f.league).startsWith("tennis.")
+        ? tennisAlerts(prev, mine, st.e, lng, f.url ?? "/")
+        : liveAlerts(prev, mine, st.e, st.keyEvents, lng, f.url ?? "/");
       for (const al of alerts) {
         const r = await sendPush(subRow.sub, al);
         if (r === "ok") live++;
@@ -146,7 +156,7 @@ async function run(req: NextRequest) {
     if (r === "ok") mornings++;
   }
 
-  const summary = { at: new Date().toISOString(), ms: Date.now() - t0, due: due?.length ?? 0, sent, live, mornings, followedLive: follows?.length ?? 0, failures: failures.slice(0, 5), liveError: fErr?.message ?? null };
+  const summary = { at: new Date().toISOString(), ms: Date.now() - t0, autoAdded, due: due?.length ?? 0, sent, live, mornings, followedLive: follows?.length ?? 0, failures: failures.slice(0, 5), liveError: fErr?.message ?? null };
   // Latido: última ejecución (visible en /api/status).
   await db.from("fl_results").upsert({ event_key: "__cron", value: summary });
   return NextResponse.json({ ok: true, ...summary });

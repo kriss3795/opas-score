@@ -13,10 +13,10 @@ export interface Fact {
   score?: number;
 }
 
-const fmtDate = (iso: string, lang: "fr" | "es") =>
+export const fmtDate = (iso: string, lang: "fr" | "es") =>
   new Date(iso).toLocaleDateString(lang === "fr" ? "fr-FR" : "es-CL", { day: "numeric", month: "long", year: "numeric" });
 
-function pick(facts: Fact[], n = 3): Fact[] {
+export function pick(facts: Fact[], n = 3): Fact[] {
   const seen = new Set<string>();
   return facts
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))

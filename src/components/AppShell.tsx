@@ -52,7 +52,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { href: "/settings", label: t("tabSettings"), icon: IconSettings, show: true },
   ].filter((x) => x.show);
 
-  const active = (href: string) => (href === "/" ? path === "/" || path.startsWith("/match") || path.startsWith("/event") : path.startsWith(href));
+  const active = (href: string) => (href === "/" ? path === "/" || path.startsWith("/match") || path.startsWith("/event") || path.startsWith("/tennis") : path.startsWith(href));
 
   return (
     <div className="mx-auto min-h-dvh max-w-xl">

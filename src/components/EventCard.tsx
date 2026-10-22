@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/lib/client/store";
-import { fmtTime, isInFrance, type Key } from "@/lib/i18n";
+import { fmtTime, isInFrance, locale, type Key } from "@/lib/i18n";
 import { leagueMeta, sportMeta, F1_TV_FR } from "@/lib/catalog";
 import type { SportEvent, Side } from "@/lib/types";
 import { currentSubscription, enablePush, setReminder } from "@/lib/client/push";
@@ -40,7 +40,21 @@ export function StatusBadge({ e }: { e: SportEvent }) {
   }
   if (e.status === "post") return <span className="text-sm font-semibold text-muted">{t("final")}</span>;
   if (e.status === "cancelled") return <span className="text-sm font-semibold text-muted">{t("postponed")}</span>;
-  return <span className="font-score text-xl font-bold">{fmtTime(e.start, lang)}</span>;
+  // Fuera de hoy, siempre se muestra el día junto a la hora (evita confundir el sábado con hoy).
+  const d = new Date(e.start);
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  const dayTxt = sameDay
+    ? null
+    : d.toDateString() === new Date(today.getTime() + 86400000).toDateString()
+      ? t("tomorrow")
+      : d.toLocaleDateString(locale(lang), { weekday: "short", day: "numeric", month: "short" });
+  return (
+    <span className="flex flex-col items-end leading-none">
+      {dayTxt && <span className="mb-1 text-[11px] font-bold text-muted capitalize">{dayTxt}</span>}
+      <span className="font-score text-xl font-bold">{fmtTime(e.start, lang)}</span>
+    </span>
+  );
 }
 
 function eventName(e: SportEvent, t: (k: Key) => string) {
@@ -69,7 +83,13 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
   const tv = isInFrance() ? (e.sport === "f1" ? F1_TV_FR : league?.tvFR) : undefined;
   // Clave única del evento (los ids de la fuente se repiten entre deportes).
   const key = `${e.sport}:${e.id}`;
-  const important = prefs.important.includes(key) || prefs.important.includes(e.id);
+  // Partidos de equipos, jugadores o tenistas seguidos: avisos siempre activados.
+  const autoFollowed =
+    (e.home?.id && favIds.has(`${e.sport}:${e.home.id}`)) ||
+    (e.away?.id && favIds.has(`${e.sport}:${e.away.id}`)) ||
+    (e.sport === "tennis" && (prefs.players ?? []).some((p) => p.id === e.home?.id || p.id === e.away?.id || p.name === e.home?.name || p.name === e.away?.name)) ||
+    (prefs.athletes ?? []).some((a) => a.sport === e.sport && a.teamId && (a.teamId === e.home?.id || a.teamId === e.away?.id));
+  const important = Boolean(autoFollowed) || prefs.important.includes(key) || prefs.important.includes(e.id);
   const [busy, setBusy] = useState(false);
 
   // Animación sutil cuando cambia el marcador.
@@ -97,6 +117,14 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
     ev.preventDefault();
     ev.stopPropagation();
     if (busy) return;
+    if (autoFollowed) {
+      alert(
+        lang === "fr"
+          ? "Tu suis cette équipe ou ce joueur : les notifications de ce match sont toujours activées."
+          : "Sigues a este equipo o jugador: los avisos de este partido están siempre activados.",
+      );
+      return;
+    }
     setBusy(true);
     try {
       let sub = await currentSubscription();
