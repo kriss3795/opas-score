@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { useApp } from "@/lib/client/store";
-import { registerSW, syncPrefs } from "@/lib/client/push";
+import { healPush, registerSW, syncPrefs } from "@/lib/client/push";
 import { agendaParams } from "@/lib/client/useEvents";
 import { playSound, unlockAudio } from "@/lib/client/sounds";
 import Welcome from "./Welcome";
@@ -36,6 +36,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const id = setTimeout(() => syncPrefs(q, lang, morning), 1500);
     return () => clearTimeout(id);
   }, [q, lang, morning, ready, prefs.onboarded]);
+
+  // Auto-reparación de los avisos cada vez que se abre la app.
+  useEffect(() => {
+    if (!ready || !prefs.onboarded) return;
+    const run = () => healPush(lang, q);
+    const id = setTimeout(run, 2500);
+    const onVis = () => document.visibilityState === "visible" && run();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearTimeout(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+    // Solo al abrir (o volver a) la app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, prefs.onboarded]);
 
   if (!ready) return <div className="min-h-dvh bg-bg" />;
   // Los amigos que llegan con un enlace de invitación entran directo a la liga.

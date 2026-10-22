@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useApp } from "@/lib/client/store";
 import { leagueMeta, sportMeta } from "@/lib/catalog";
-import { currentSubscription, enablePush, isStandalone, platform, pushSupported, sendTest } from "@/lib/client/push";
+import { currentSubscription, delayedTest, enablePush, isStandalone, platform, pushHealth, pushSupported, sendTest } from "@/lib/client/push";
 import TeamLogo from "@/components/TeamLogo";
 import { agendaParams } from "@/lib/client/useEvents";
 import { playSound, setSoundsEnabled, soundsEnabled, type SoundKind } from "@/lib/client/sounds";
@@ -109,6 +109,7 @@ export default function SettingsPage() {
           {notif === "on" && (
             <>
               <p className="font-semibold text-football">✓ {t("notifOn")}</p>
+              <PushDoctor />
               <button onClick={async () => setMsg((await sendTest()) ? "✓" : t("dataError"))} className="w-full rounded-xl bg-card2 py-3 font-semibold">
                 {t("testNotif")}
               </button>
@@ -268,6 +269,68 @@ function SoundSettings() {
           ? "Quand l'app est ouverte, chaque événement a son propre son. App fermée, le téléphone utilise sa sonnerie de notification (sur Android, chaque type vibre différemment)."
           : "Con la app abierta, cada evento tiene su propio sonido. Con la app cerrada, el teléfono usa su tono de notificación (en Android, cada tipo vibra distinto)."}
       </p>
+    </div>
+  );
+}
+
+// Diagnóstico de avisos: estado real y prueba con la app cerrada.
+function PushDoctor() {
+  const { lang } = useApp();
+  const fr = lang === "fr";
+  const [h, setH] = useState<{ registered: boolean; lastCron: string | null } | null | undefined>(undefined);
+  const [sent, setSent] = useState(false);
+  useEffect(() => {
+    pushHealth().then(setH);
+  }, []);
+  const ago = h?.lastCron ? Math.round((Date.now() - new Date(h.lastCron).getTime()) / 60000) : null;
+  const serverOk = ago !== null && ago <= 3;
+  const Line = ({ ok, text }: { ok: boolean | null; text: string }) => (
+    <li className="flex items-start gap-2 text-sm">
+      <span>{ok === null ? "…" : ok ? "✅" : "⚠️"}</span>
+      <span className={ok === false ? "font-semibold text-live" : ""}>{text}</span>
+    </li>
+  );
+  return (
+    <div className="space-y-3 rounded-xl bg-card2 p-3">
+      <ul className="space-y-1.5">
+        <Line ok={h === undefined ? null : Boolean(h?.registered)} text={fr ? "Téléphone enregistré pour les notifications" : "Teléfono registrado para los avisos"} />
+        <Line
+          ok={h === undefined ? null : serverOk}
+          text={
+            ago === null
+              ? fr
+                ? "Contrôle du serveur : jamais exécuté"
+                : "Control del servidor: nunca se ejecutó"
+              : fr
+                ? `Dernier contrôle du serveur : il y a ${ago} min`
+                : `Último control del servidor: hace ${ago} min`
+          }
+        />
+      </ul>
+      <button
+        disabled={sent}
+        onClick={async () => setSent(await delayedTest())}
+        className="w-full rounded-xl bg-brand py-3 font-bold text-white disabled:opacity-60"
+      >
+        {sent
+          ? fr
+            ? "Envoyé ! Ferme l'app : il arrive dans ~1 min"
+            : "¡Listo! Cierra la app: llega en ~1 min"
+          : fr
+            ? "Tester avec l'app fermée"
+            : "Probar con la app cerrada"}
+      </button>
+      {platform() === "android" && (
+        <details className="text-sm">
+          <summary className="cursor-pointer font-semibold">{fr ? "Si rien n'arrive (Android)" : "Si no llega nada (Android)"}</summary>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-muted">
+            <li>{fr ? "Paramètres → Applications → Chrome → Notifications : activées, avec son." : "Ajustes → Aplicaciones → Chrome → Notificaciones: activadas y con sonido."}</li>
+            <li>{fr ? "Paramètres → Applications → Chrome → Batterie : « Non restreinte »." : "Ajustes → Aplicaciones → Chrome → Batería: «Sin restricciones»."}</li>
+            <li>{fr ? "Fais pareil pour l'app « Opa's Score » si elle apparaît dans la liste." : "Haz lo mismo con la app «Opa's Score» si aparece en la lista."}</li>
+            <li>{fr ? "Mode « Ne pas déranger » désactivé, ou Opa's Score autorisée." : "Modo «No molestar» apagado, o Opa's Score permitida."}</li>
+          </ol>
+        </details>
+      )}
     </div>
   );
 }

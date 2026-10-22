@@ -41,6 +41,27 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// Si el teléfono renueva la suscripción de avisos, se vuelve a registrar sola en el servidor.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const old = event.oldSubscription;
+        const opts = old && old.options ? old.options : null;
+        const sub = event.newSubscription || (opts ? await self.registration.pushManager.subscribe(opts) : null);
+        if (!sub) return;
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sub: sub.toJSON(), oldEndpoint: old && old.endpoint }),
+        });
+      } catch {
+        // sin conexión: se reintenta al abrir la app
+      }
+    })()
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || "/";
@@ -55,7 +76,7 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // Red primero; si no hay conexión, se sirve la última versión guardada de la página.
-const CACHE = "opas-v2";
+const CACHE = "opas-v3";
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || req.mode !== "navigate") return;

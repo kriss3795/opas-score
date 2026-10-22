@@ -53,7 +53,7 @@ export async function morningSummary(prefs: Record<string, unknown>, lang: "fr" 
   const today = localDate(tz, now);
   const yesterday = localDate(tz, new Date(now.getTime() - 86400000));
   const day = (e: SportEvent) => localDate(tz, new Date(e.start));
-  const time = (e: SportEvent) => new Date(e.start).toLocaleTimeString(lang === "fr" ? "fr-FR" : "es-CL", { timeZone: tz, hour: "2-digit", minute: "2-digit" });
+  const time = (e: SportEvent) => new Date(e.start).toLocaleTimeString(lang === "fr" ? "fr-FR" : "es-CL", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
 
   const past = events.filter((e) => e.status === "post" && day(e) === yesterday).slice(0, 4);
   const next = events.filter((e) => e.status !== "post" && e.status !== "cancelled" && day(e) === today).slice(0, 4);

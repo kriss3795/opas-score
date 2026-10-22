@@ -22,6 +22,8 @@ export interface PlayerLine {
   jersey?: string;
   name: string;
   pos?: string;
+  posName?: string;
+  place?: number;
   starter?: boolean;
   subIn?: string;
   subOut?: string;
@@ -159,6 +161,8 @@ export async function matchDetail(league: string, id: string) {
           jersey: p.jersey,
           name: p.athlete?.displayName ?? "?",
           pos: p.position?.abbreviation,
+          posName: p.position?.displayName ?? p.position?.name,
+          place: p.formationPlace ? Number(p.formationPlace) : undefined,
           starter: Boolean(p.starter),
           subIn: p.subbedIn ? subPlay?.clock?.displayValue ?? "" : undefined,
           subOut: p.subbedOut ? subPlay?.clock?.displayValue ?? "" : undefined,

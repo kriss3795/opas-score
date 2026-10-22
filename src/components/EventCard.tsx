@@ -51,8 +51,8 @@ export function StatusBadge({ e }: { e: SportEvent }) {
       : d.toLocaleDateString(locale(lang), { weekday: "short", day: "numeric", month: "short" });
   return (
     <span className="flex flex-col items-end leading-none">
-      {dayTxt && <span className="mb-1 text-[11px] font-bold text-muted capitalize">{dayTxt}</span>}
-      <span className="font-score text-xl font-bold">{fmtTime(e.start, lang)}</span>
+      {dayTxt && <span className="mb-1 text-[11px] font-bold whitespace-nowrap text-muted capitalize">{dayTxt}</span>}
+      <span className="font-score text-xl font-bold whitespace-nowrap">{fmtTime(e.start, lang)}</span>
     </span>
   );
 }

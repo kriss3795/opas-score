@@ -8,6 +8,7 @@ import { leagueMeta, sportMeta } from "@/lib/catalog";
 import { leaderLabel, periodLabels, roleLabel, scoreTypeLabel, statLabel } from "@/lib/statLabels";
 import TeamLogo from "@/components/TeamLogo";
 import { EloBar, FactsCard } from "@/components/Facts";
+import Pitch from "@/components/Pitch";
 import { IconBack, IconSofa, IconTv } from "@/components/Icons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -410,6 +411,8 @@ function Lineups({ m, teamOf }: { m: any; teamOf: (id: string) => any }) {
               <span className="flex-1 font-bold">{team?.name}</span>
               {l.formation && <span className="font-score rounded-md bg-card2 px-2 py-0.5 text-sm font-bold">{l.formation}</span>}
             </div>
+            <Pitch starters={l.starters} formation={l.formation} color={team?.color} />
+            <h4 className="mt-4 mb-2 text-xs font-bold tracking-wider text-muted uppercase">{fr ? "Titulaires" : "Titulares"}</h4>
             <PlayerList players={l.starters} />
             {l.bench.length > 0 && (
               <>
@@ -573,7 +576,7 @@ function Preview({ m }: { m: any }) {
                     <li key={i} className="flex items-center gap-2">
                       <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold ${color(g.result)}`}>{letter(g.result)}</span>
                       <span className="min-w-0 flex-1 truncate text-muted">
-                        {g.home ? (fr ? "vs" : "vs") : "@"} {g.opp}
+                        {fr ? "contre" : "vs"} {g.opp} · {g.home ? (fr ? "domicile" : "local") : fr ? "extérieur" : "visita"}
                       </span>
                       <span className="font-score font-bold">{g.score}</span>
                     </li>

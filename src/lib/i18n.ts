@@ -196,7 +196,8 @@ export function isInFrance() {
 }
 
 export function fmtTime(iso: string, lang: Lang) {
-  return new Date(iso).toLocaleTimeString(locale(lang), { hour: "2-digit", minute: "2-digit" });
+  // Formato 24 h (13:00), como se usa en Francia y Chile: evita "a. m." / "p. m." partidos en dos líneas.
+  return new Date(iso).toLocaleTimeString(locale(lang), { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export function fmtDay(iso: string, lang: Lang) {

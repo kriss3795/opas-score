@@ -108,3 +108,47 @@ export async function syncPrefs(query: string, lang: string, morning: boolean) {
     body: JSON.stringify({ endpoint: sub.endpoint, query, lang, morning, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
   }).catch(() => undefined);
 }
+
+// Al abrir la app: si los avisos están permitidos, se asegura la suscripción y se vuelve a registrar
+// en el servidor (repara suscripciones vencidas o borradas sin que el usuario haga nada).
+export async function healPush(lang: string, query: string) {
+  try {
+    if (!pushSupported() || Notification.permission !== "granted") return;
+    const reg = (await navigator.serviceWorker.getRegistration()) ?? (await registerSW());
+    if (!reg) return;
+    await navigator.serviceWorker.ready;
+    const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!key) return;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) });
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sub: sub.toJSON(), lang, query, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    });
+  } catch {
+    /* sin conexión: se reintenta la próxima vez */
+  }
+}
+
+export async function pushHealth(): Promise<{ registered: boolean; lastCron: string | null } | null> {
+  const sub = await currentSubscription();
+  const r = await fetch("/api/push/health", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: sub?.endpoint ?? "" }),
+  }).catch(() => null);
+  return r?.ok ? r.json() : null;
+}
+
+// Programa un aviso de prueba que llega en ~1 minuto (para probar con la app cerrada).
+export async function delayedTest(): Promise<boolean> {
+  const sub = await currentSubscription();
+  if (!sub) return false;
+  const r = await fetch("/api/push/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint, delayed: true }),
+  });
+  return r.ok;
+}
