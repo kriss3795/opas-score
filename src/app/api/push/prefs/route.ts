@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const { error } = await db
     .from("push_subs")
     .update({
-      prefs: Object.fromEntries(new URLSearchParams(b.query.slice(0, 4000)).entries()),
+      prefs: Object.fromEntries(new URLSearchParams(b.query.slice(0, 12000)).entries()),
       lang: b.lang === "es" ? "es" : "fr",
       tz: typeof b.tz === "string" ? b.tz.slice(0, 64) : null,
       morning: b.morning !== false,

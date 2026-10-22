@@ -21,10 +21,10 @@ export async function POST(req: NextRequest) {
     ...(body.lang ? { lang: body.lang === "es" ? "es" : "fr" } : {}),
     ...(typeof body.tz === "string" ? { tz: body.tz.slice(0, 64) } : {}),
     ...(typeof body.query === "string" && body.query
-      ? { prefs: Object.fromEntries(new URLSearchParams(body.query.slice(0, 4000)).entries()) }
+      ? { prefs: Object.fromEntries(new URLSearchParams(body.query.slice(0, 12000)).entries()) }
       : {}),
   });
-  if (!error && inherited.lang) {
+  if (!error && Object.keys(inherited).length) {
     await db.from("reminders").update({ endpoint: sub.endpoint }).eq("endpoint", body.oldEndpoint);
     await db.from("push_subs").delete().eq("endpoint", body.oldEndpoint);
   }

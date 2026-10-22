@@ -68,7 +68,10 @@ self.addEventListener("notificationclick", (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {
-        if ("focus" in c) { c.navigate(url); return c.focus(); }
+        if ("focus" in c) {
+          // Si la ventana no se puede redirigir, se abre una nueva con el partido.
+          return c.focus().then((w) => (w && w.navigate ? w.navigate(url) : null)).catch(() => self.clients.openWindow(url));
+        }
       }
       return self.clients.openWindow(url);
     })

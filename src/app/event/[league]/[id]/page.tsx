@@ -21,16 +21,27 @@ export default function EventPage({ params }: { params: Promise<{ league: string
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let alive = true;
+    setEv(undefined);
     const load = () =>
       fetch(`/api/event?league=${league}&id=${id}&d=${day}`)
         .then((r) => r.json())
         .then((d) => {
-          setEv(d.event ?? null);
+          if (!alive) return;
+          setEv((p: any) => d.event ?? (p ? p : null));
           timer = setTimeout(load, d.event?.state === "in" ? 30000 : 600000);
         })
-        .catch(() => setEv(null));
+        .catch(() => {
+          if (!alive) return;
+          // Un corte de red no borra lo que ya se ve: se reintenta en 1 minuto.
+          setEv((p: any) => (p ? p : null));
+          timer = setTimeout(load, 60000);
+        });
     load();
-    return () => clearTimeout(timer);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, [league, id, day]);
 
   return (

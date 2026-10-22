@@ -163,8 +163,7 @@ async function run(req: NextRequest) {
   // Resumen matinal a las 8:00 en la hora local de cada teléfono.
   let mornings = 0;
   const { data: subs, error: subErr } = await db.from("push_subs").select("endpoint, sub, lang, tz, prefs, morning, last_morning").eq("morning", true).limit(50);
-  if (subErr) return NextResponse.json({ ok: true, due: due?.length ?? 0, sent, morningError: subErr.message });
-  for (const s of subs ?? []) {
+  for (const s of subErr ? [] : subs ?? []) {
     const tz = s.tz || "Europe/Paris";
     if (!s.prefs || !isMorning(tz)) continue;
     const today = localDate(tz);
@@ -177,7 +176,7 @@ async function run(req: NextRequest) {
     if (r === "ok") mornings++;
   }
 
-  const summary = { at: new Date().toISOString(), ms: Date.now() - t0, autoAdded, due: due?.length ?? 0, sent, live, mornings, followedLive: follows?.length ?? 0, failures: failures.slice(0, 5), liveError: fErr?.message ?? null };
+  const summary = { at: new Date().toISOString(), ms: Date.now() - t0, autoAdded, due: due?.length ?? 0, sent, live, mornings, followedLive: follows?.length ?? 0, failures: failures.slice(0, 5), liveError: fErr?.message ?? null, morningError: subErr?.message ?? null };
   // Latido: última ejecución (visible en /api/status).
   await db.from("fl_results").upsert({ event_key: "__cron", value: summary });
   return NextResponse.json({ ok: true, ...summary });

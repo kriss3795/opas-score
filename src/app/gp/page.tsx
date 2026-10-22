@@ -33,20 +33,26 @@ export default function GPPage() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let alive = true;
     const load = () =>
       fetch(`/api/f1/gp?drivers=${encodeURIComponent(driversParam)}`)
         .then((r) => r.json())
         .then((x) => {
+          if (!alive) return;
           setD(x);
           const live = x?.current?.sessions?.some((s: any) => s.status === "in");
           timer = setTimeout(load, live ? 20000 : 300000);
         })
         .catch(() => {
-          setD(null);
+          if (!alive) return;
+          setD((p: any) => (p ? p : null));
           timer = setTimeout(load, 60000);
         });
     load();
-    return () => clearTimeout(timer);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, [driversParam]);
 
   if (!prefs.sports.includes("f1"))

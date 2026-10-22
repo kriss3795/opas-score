@@ -103,8 +103,10 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
   const [f1, setF1] = useState(prefs.sports.includes("f1"));
   const [duration, setDuration] = useState<string>("30");
   const [untilDate, setUntilDate] = useState<string>("");
-  const minDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  const maxDate = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+  // Fechas en el calendario local del teléfono (no en UTC, que en la noche ya es "mañana").
+  const ymd = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  const minDate = ymd(new Date(Date.now() + 86400000));
+  const maxDate = ymd(new Date(Date.now() + 364 * 86400000));
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 

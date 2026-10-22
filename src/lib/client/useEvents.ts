@@ -38,19 +38,25 @@ export function useAgenda() {
   const [failed, setFailed] = useState<string[]>([]);
   const [error, setError] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Generación actual: una respuesta de una petición vieja (otra pantalla, otros favoritos) se descarta
+  // y no programa más refrescos, así no quedan ciclos de consultas corriendo en segundo plano.
+  const gen = useRef(0);
 
   const url = `/api/agenda?${agendaParams(prefs)}`;
 
   const load = useCallback(async () => {
+    const my = gen.current;
     let live = false;
     try {
       const r = await fetch(url);
       const d = await r.json();
+      if (my !== gen.current) return;
       setEvents(d.events ?? []);
       setFailed(d.failed ?? []);
       setError(false);
       live = (d.events ?? []).some((e: SportEvent) => e.status === "in");
     } catch {
+      if (my !== gen.current) return;
       setError(true);
     }
     if (timer.current) clearTimeout(timer.current);
@@ -58,10 +64,12 @@ export function useAgenda() {
   }, [url]);
 
   useEffect(() => {
+    gen.current++;
     load();
     const onVis = () => document.visibilityState === "visible" && load();
     document.addEventListener("visibilitychange", onVis);
     return () => {
+      gen.current++;
       if (timer.current) clearTimeout(timer.current);
       document.removeEventListener("visibilitychange", onVis);
     };

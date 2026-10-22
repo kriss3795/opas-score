@@ -27,16 +27,26 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let alive = true;
+    setM(undefined);
     const load = () =>
       fetch(`/api/tennis/match?tour=${tour}&id=${id}`)
         .then((r) => r.json())
         .then((d) => {
-          setM(d.match ?? null);
+          if (!alive) return;
+          setM((p: typeof m) => d.match ?? (p ? p : null));
           timer = setTimeout(load, d.match?.state === "in" ? 20000 : 300000);
         })
-        .catch(() => setM(null));
+        .catch(() => {
+          if (!alive) return;
+          setM((p: typeof m) => (p ? p : null));
+          timer = setTimeout(load, 60000);
+        });
     load();
-    return () => clearTimeout(timer);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, [tour, id]);
 
   if (m === undefined) return <div className="pt-safe p-4"><div className="h-56 animate-pulse rounded-3xl bg-card" /></div>;
