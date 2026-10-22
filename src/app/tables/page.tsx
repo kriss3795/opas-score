@@ -139,6 +139,7 @@ export default function TablesPage() {
             <LeagueMath data={data} />
             <a href={data.sourceUrl} target="_blank" rel="noreferrer" className="mt-4 block px-1 text-xs text-muted underline">
               {t("source")} : {data.source}
+              {data.season ? ` · ${lang === "fr" ? "saison" : "temporada"} ${data.season}` : ""}
             </a>
           </>
         )}

@@ -41,13 +41,13 @@ export interface BoxGroup {
 
 const text = (x: any) => String(x ?? "").toLowerCase();
 
-function side(c: any) {
+function side(c: any, intl = false) {
   if (!c) return null;
   return {
     id: String(c.team?.id ?? c.id ?? ""),
     name: c.team?.displayName ?? "?",
     short: c.team?.shortDisplayName ?? c.team?.abbreviation,
-    logo: c.team?.logos?.[0]?.href ?? c.team?.logo,
+    logo: ((u?: string) => (u && /\/countries\//.test(u) && !intl ? undefined : u))(c.team?.logos?.[0]?.href ?? c.team?.logo),
     color: c.team?.color,
     score: c.score,
     pen: c.shootoutScore !== undefined && c.shootoutScore !== null ? String(c.shootoutScore) : undefined,
@@ -94,8 +94,9 @@ export async function matchDetail(league: string, id: string) {
 
   const comp = d.header?.competitions?.[0];
   const cs: any[] = comp?.competitors ?? [];
-  const home = side(cs.find((c) => c.homeAway === "home") ?? cs[0]);
-  const away = side(cs.find((c) => c.homeAway === "away") ?? cs[1]);
+  const intl = meta.group === "intl";
+  const home = side(cs.find((c) => c.homeAway === "home") ?? cs[0], intl);
+  const away = side(cs.find((c) => c.homeAway === "away") ?? cs[1], intl);
   const status = comp?.status ?? {};
   const type = status.type ?? {};
 
@@ -125,7 +126,8 @@ export async function matchDetail(league: string, id: string) {
           clock: p.clock?.displayValue ?? "",
           period: p.period?.number,
           teamId: String(p.team?.id ?? ""),
-          player: p.participants?.[0]?.athlete?.displayName,
+          // Sin participantes (NFL): el autor sale del texto de la jugada ("C. McCaffrey 5 Yd Run…").
+          player: p.participants?.[0]?.athlete?.displayName ?? String(p.text ?? "").match(/^([A-Z][\w.'-]*(?:\s[A-Z][\w.'-]*){0,3})\s+\d+\s+(?:Yd|Yard)/)?.[1],
           second: p.participants?.[1]?.athlete?.displayName,
           detail: p.scoringType?.displayName ?? p.type?.text,
           score: p.homeScore !== undefined ? `${p.homeScore}-${p.awayScore}` : undefined,

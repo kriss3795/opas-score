@@ -62,6 +62,11 @@ export function StatusBadge({ e }: { e: SportEvent }) {
         {e.statusDetail === "cancelled" ? (lang === "fr" ? "Annulé" : "Cancelado") : t("postponed")}
       </span>
     );
+  // Solo fecha (golf): se muestra el día del torneo, sin hora.
+  if (e.allDay) {
+    const s = new Date(e.start).toLocaleDateString(locale(lang), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+    return <span className="text-right text-sm leading-tight font-bold text-muted capitalize">{s}</span>;
+  }
   // Fuera de hoy, siempre se muestra el día junto a la hora (evita confundir el sábado con hoy).
   const d = new Date(e.start);
   const today = new Date();
@@ -251,7 +256,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
         </div>
         <div className="flex w-16 shrink-0 flex-col items-end gap-1.5">
           <StatusBadge e={e} />
-          {e.status === "pre" && (
+          {e.status === "pre" && !e.allDay && (
             <button
               onClick={toggleRemind}
               aria-label={important ? t("reminded") : t("remind")}

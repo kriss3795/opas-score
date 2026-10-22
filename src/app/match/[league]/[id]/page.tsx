@@ -512,7 +512,50 @@ function PlayerList({ players, muted }: { players: any[]; muted?: boolean }) {
   );
 }
 
+// Abreviaturas de la planilla (la fuente las da en inglés).
+const BOX: Record<string, [string, string]> = {
+  MIN: ["MIN", "MIN"],
+  PTS: ["PTS", "PTS"],
+  REB: ["REB", "REB"],
+  AST: ["PD", "AST"],
+  TO: ["BP", "PER"],
+  STL: ["INT", "ROB"],
+  BLK: ["CTR", "TAP"],
+  PF: ["F", "FP"],
+  OREB: ["RO", "RO"],
+  DREB: ["RD", "RD"],
+  FG: ["TIRS", "TC"],
+  "3PT": ["3PTS", "TRIPLES"],
+  FT: ["LF", "TL"],
+  G: ["B", "G"],
+  A: ["PD", "A"],
+  SOG: ["TC", "TA"],
+  PIM: ["PÉN", "PEN"],
+  SV: ["ARR", "ATJ"],
+};
+const boxLabel = (l: string, lang: "fr" | "es") => BOX[l]?.[lang === "fr" ? 0 : 1] ?? l;
+// Grupos de la planilla (NFL, béisbol, hockey).
+const GROUPS: Record<string, [string, string]> = {
+  passing: ["Passes", "Pases"],
+  rushing: ["Courses", "Carreras"],
+  receiving: ["Réceptions", "Recepciones"],
+  fumbles: ["Fumbles", "Balones sueltos"],
+  defensive: ["Défense", "Defensa"],
+  interceptions: ["Interceptions", "Intercepciones"],
+  kickreturns: ["Retours de coup d'envoi", "Devoluciones de patada"],
+  puntreturns: ["Retours de punt", "Devoluciones de despeje"],
+  kicking: ["Coups de pied", "Pateo"],
+  punting: ["Punts", "Despejes"],
+  batting: ["Frappe", "Bateo"],
+  pitching: ["Lanceurs", "Pitcheo"],
+  forwards: ["Attaquants", "Delanteros"],
+  defenses: ["Défenseurs", "Defensas"],
+  goalies: ["Gardiens", "Porteros"],
+};
+const groupLabel = (g: string, lang: "fr" | "es") => GROUPS[g.toLowerCase()]?.[lang === "fr" ? 0 : 1] ?? g.charAt(0).toUpperCase() + g.slice(1);
+
 function Boxscore({ m, teamOf }: { m: any; teamOf: (id: string) => any }) {
+  const { lang } = useApp();
   const [team, setTeam] = useState(0);
   const b = m.boxscore[team];
   return (
@@ -526,7 +569,7 @@ function Boxscore({ m, teamOf }: { m: any; teamOf: (id: string) => any }) {
         ))}
       </div>
       {b?.groups.map((g: any, gi: number) => (
-        <Card key={gi} title={g.title ? g.title.charAt(0).toUpperCase() + g.title.slice(1) : undefined}>
+        <Card key={gi} title={g.title ? groupLabel(g.title, lang) : undefined}>
           <div className="no-scrollbar -mx-4 overflow-x-auto px-4">
             <table className="w-full text-sm whitespace-nowrap">
               <thead>
@@ -534,7 +577,7 @@ function Boxscore({ m, teamOf }: { m: any; teamOf: (id: string) => any }) {
                   <th className="sticky left-0 bg-card py-1 pr-3 text-left font-semibold"></th>
                   {g.labels.map((l: string, i: number) => (
                     <th key={i} className="px-2 text-center font-semibold">
-                      {l}
+                      {boxLabel(l, lang)}
                     </th>
                   ))}
                 </tr>

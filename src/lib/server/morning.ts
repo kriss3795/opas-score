@@ -62,7 +62,7 @@ export async function morningSummary(prefs: Record<string, unknown>, lang: "fr" 
 
   const parts: string[] = [];
   if (past.length) parts.push(`${lang === "fr" ? "Hier" : "Ayer"} : ${past.map((e) => label(e, lang, true)).join(" · ")}`);
-  if (next.length) parts.push(`${lang === "fr" ? "Aujourd'hui" : "Hoy"} : ${next.map((e) => `${label(e, lang, false)} ${time(e)}`).join(" · ")}`);
+  if (next.length) parts.push(`${lang === "fr" ? "Aujourd'hui" : "Hoy"} : ${next.map((e) => `${label(e, lang, false)}${e.allDay ? "" : ` ${time(e)}`}`).join(" · ")}`);
   return {
     title: lang === "fr" ? "☀️ Ton résumé du matin" : "☀️ Tu resumen matinal",
     body: parts.join("\n").slice(0, 300),

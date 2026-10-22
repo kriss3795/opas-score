@@ -41,6 +41,7 @@ export interface SportEvent {
   venue?: string;
   round?: string; // ronda (tenis, copas)
   link?: string; // ruta interna de detalle
+  allDay?: boolean; // la fuente solo da la fecha (golf): no se muestra una hora inventada
   source: string; // nombre de la fuente de datos
 }
 
@@ -65,6 +66,7 @@ export interface Standings {
   competitionId: string;
   competitionName: string;
   rows: StandingRow[];
+  season?: string; // temporada de la tabla (p. ej. "2026-27"), para que no se confunda con una vieja
   source: string;
   sourceUrl: string;
 }

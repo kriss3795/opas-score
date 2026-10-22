@@ -11,6 +11,27 @@ import { IconBack } from "@/components/Icons";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Detalle de torneos de golf, veladas de UFC y carreras (IndyCar, NASCAR).
+// Categorías de peso (la fuente las da en inglés; "W" = femenino).
+function weightLabel(w: string, lang: "fr" | "es") {
+  const fr = lang === "fr";
+  const women = /^W\s|women/i.test(w);
+  const base = w.replace(/^W\s+|women'?s\s*/i, "").trim().toLowerCase();
+  const M: Record<string, [string, string]> = {
+    strawweight: ["Poids paille", "Peso paja"],
+    flyweight: ["Poids mouche", "Peso mosca"],
+    bantamweight: ["Poids coq", "Peso gallo"],
+    featherweight: ["Poids plume", "Peso pluma"],
+    lightweight: ["Poids léger", "Peso ligero"],
+    welterweight: ["Poids mi-moyen", "Peso wélter"],
+    middleweight: ["Poids moyen", "Peso medio"],
+    "light heavyweight": ["Poids mi-lourd", "Peso semipesado"],
+    heavyweight: ["Poids lourd", "Peso pesado"],
+    catchweight: ["Poids intermédiaire", "Peso pactado"],
+  };
+  const t = M[base]?.[fr ? 0 : 1] ?? w;
+  return women && M[base] ? `${t} ${fr ? "(F)" : "(fem.)"}` : t;
+}
+
 // Resultado de un combate: la fuente lo da en inglés ("KO/TKO", "Decision - Unanimous"…).
 function fightResult(d: string, lang: "fr" | "es") {
   const fr = lang === "fr";
@@ -76,7 +97,9 @@ export default function EventPage({ params }: { params: Promise<{ league: string
             </div>
             <h1 className="mt-1 text-2xl leading-tight font-extrabold">{ev.name}</h1>
             <p className="mt-1 text-text/80">
-              {fmtDay(ev.start, lang)} · {fmtTime(ev.start, lang)}
+              {meta?.sport === "golf"
+                ? new Date(ev.start).toLocaleDateString(lang === "fr" ? "fr-FR" : "es-CL", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
+                : `${fmtDay(ev.start, lang)} · ${fmtTime(ev.start, lang)}`}
             </p>
             {ev.venue && <p className="text-sm text-text/70">📍 {ev.venue}</p>}
           </section>
@@ -85,9 +108,15 @@ export default function EventPage({ params }: { params: Promise<{ league: string
             <section className="rounded-3xl bg-card p-4">
               <h3 className="mb-3 font-bold">{t("fightCard")}</h3>
               <ul className="space-y-3">
-                {ev.fights.map((f: any, i: number) => (
+                {/* La fuente lista de la primera pelea al combate estelar: se muestra al revés (estelar primero). */}
+                {[...ev.fights].reverse().map((f: any, i: number) => (
                   <li key={i} className="rounded-2xl bg-card2 p-3">
-                    {f.weight && <div className="mb-1.5 text-xs font-semibold text-muted">{f.weight}</div>}
+                    {(i === 0 || f.weight) && (
+                      <div className="mb-1.5 text-xs font-semibold text-muted">
+                        {i === 0 ? (lang === "fr" ? "Combat principal · " : "Pelea estelar · ") : ""}
+                        {f.weight ? weightLabel(f.weight, lang) : ""}
+                      </div>
+                    )}
                     {[f.a, f.b].map((x: any, k: number) => (
                       <div key={k} className={`flex items-center gap-2 ${f.status === "post" && !x.winner ? "text-muted" : ""}`}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
