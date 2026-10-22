@@ -32,6 +32,15 @@ function LeagueInner() {
     setMode("view");
   };
 
+  useEffect(() => {
+    const open = (ev: Event) => {
+      setActive((ev as CustomEvent<string>).detail);
+      setMode("view");
+    };
+    window.addEventListener("opas-open-league", open);
+    return () => window.removeEventListener("opas-open-league", open);
+  }, []);
+
   const current = mine.find((l) => l.code === active);
 
   return (
@@ -111,6 +120,7 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
+    if (busy) return;
     setBusy(true);
     setErr("");
     const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
@@ -122,9 +132,9 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
         // Fecha elegida: fin del día en la hora del teléfono.
         duration: duration === "date" ? new Date(`${untilDate}T23:59:00`).toISOString() : duration,
       }),
-    });
+    }).catch(() => null);
     setBusy(false);
-    if (!r.ok) return setErr(fr ? "Impossible de créer la ligue. Vérifie les champs." : "No se pudo crear la liga. Revisa los campos.");
+    if (!r?.ok) return setErr(fr ? "Impossible de créer la ligue. Vérifie les champs et la connexion." : "No se pudo crear la liga. Revisa los campos y la conexión.");
     const d = await r.json();
     onDone({ code: d.code, token: d.token, name });
   };
@@ -213,14 +223,23 @@ function JoinLeague({ initialCode, onDone }: { initialCode: string; onDone: (l: 
   const [code, setCode] = useState(initialCode);
   const [player, setPlayer] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   const submit = async () => {
+    if (busy) return; // un doble toque no crea dos jugadores
     setErr("");
-    const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "join", code, player }) });
-    if (r.status === 409) return setErr(fr ? "Ce prénom est déjà pris dans la ligue." : "Ese nombre ya está en la liga.");
-    if (!r.ok) return setErr(fr ? "Code introuvable." : "Código no encontrado.");
-    const d = await r.json();
-    const info = await fetch(`/api/league?code=${d.code}&token=${d.token}`).then((x) => x.json()).catch(() => null);
-    onDone({ code: d.code, token: d.token, name: info?.league?.name ?? d.code });
+    setBusy(true);
+    try {
+      const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "join", code, player }) });
+      if (r.status === 409) return setErr(fr ? "Ce prénom est déjà pris dans la ligue." : "Ese nombre ya está en la liga.");
+      if (!r.ok) return setErr(fr ? "Code introuvable." : "Código no encontrado.");
+      const d = await r.json();
+      const info = await fetch(`/api/league?code=${d.code}&token=${d.token}`).then((x) => x.json()).catch(() => null);
+      onDone({ code: d.code, token: d.token, name: info?.league?.name ?? d.code });
+    } catch {
+      setErr(fr ? "Pas de connexion. Réessaie." : "Sin conexión. Inténtalo de nuevo.");
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <section className="space-y-4 rounded-3xl bg-card p-4">
@@ -232,7 +251,7 @@ function JoinLeague({ initialCode, onDone }: { initialCode: string; onDone: (l: 
         <input className={inputCls} value={player} onChange={(e) => setPlayer(e.target.value)} maxLength={24} />
       </Field>
       {err && <p className="text-sm text-live">{err}</p>}
-      <button disabled={code.length !== 6 || !player.trim()} onClick={submit} className="w-full rounded-2xl bg-brand py-4 text-lg font-extrabold text-white disabled:opacity-40">
+      <button disabled={busy || code.length !== 6 || !player.trim()} onClick={submit} className="w-full rounded-2xl bg-brand py-4 text-lg font-extrabold text-white disabled:opacity-40">
         {fr ? "Rejoindre" : "Unirme"}
       </button>
     </section>
@@ -246,10 +265,11 @@ function LeagueView({ code, token }: { code: string; token: string }) {
   const [tab, setTab] = useState<"predict" | "table" | "rounds" | "mine">("predict");
 
   const load = useCallback(() => {
+    // Al recargar tras guardar, un fallo de red no borra la liga que ya se ve.
     fetch(`/api/league?code=${code}&token=${token}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then(setSt)
-      .catch(() => setSt(null));
+      .then((x) => setSt((p: any) => x ?? (p ? p : null)))
+      .catch(() => setSt((p: any) => (p ? p : null)));
   }, [code, token]);
   useEffect(() => {
     setSt(undefined);
@@ -362,7 +382,7 @@ function LeagueView({ code, token }: { code: string; token: string }) {
               <span className="flex-1">
                 <span className="block leading-tight font-semibold">{b.label}</span>
                 <span className="text-sm text-muted">
-                  {b.stake} × {b.odds.toFixed(2)} · {b.pick === "H" ? "1" : b.pick === "D" ? "N" : "2"}
+                  {b.stake} × {b.odds.toFixed(2)} · {b.pick === "H" ? "1" : b.pick === "D" ? (fr ? "N" : "X") : "2"}
                   {b.result && ` · ${b.result.h}-${b.result.a}`}
                 </span>
               </span>
@@ -379,8 +399,8 @@ function LeagueView({ code, token }: { code: string; token: string }) {
 }
 
 async function savePred(code: string, token: string, key: string, value: unknown) {
-  const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "predict", code, token, key, value }) });
-  return r.ok;
+  const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "predict", code, token, key, value }) }).catch(() => null);
+  return Boolean(r?.ok);
 }
 
 function ScorePredict({
@@ -464,7 +484,8 @@ function BetPanel({ e, code, token, bet, available, onSaved }: { e: any; code: s
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "bet", code, token, key: e.key, pick, stake }),
-    });
+    }).catch(() => null);
+    if (!r) return setMsg(fr ? "Pas de connexion. Réessaie." : "Sin conexión. Inténtalo de nuevo.");
     setMsg(r.ok ? (fr ? "✓ Pari placé" : "✓ Apuesta hecha") : fr ? "Pari refusé (solde ou match commencé)" : "Apuesta rechazada (saldo o partido empezado)");
     if (r.ok) onSaved();
   };
@@ -638,11 +659,13 @@ function SeasonHeader({ st, code, token }: { st: any; code: string; token: strin
           disabled={busy}
           onClick={async () => {
             setBusy(true);
-            const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rematch", code, token }) });
+            const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rematch", code, token }) }).catch(() => null);
             setBusy(false);
-            if (!r.ok) return;
+            if (!r?.ok) return;
             const d = await r.json();
             update((p) => ({ friendLeagues: [...(p.friendLeagues ?? []), { code: d.code, token: d.token, name: d.name }] }));
+            // Se abre directamente la nueva temporada.
+            window.dispatchEvent(new CustomEvent("opas-open-league", { detail: d.code }));
           }}
           className="mt-4 w-full rounded-2xl bg-brand py-3 font-extrabold text-white disabled:opacity-50"
         >

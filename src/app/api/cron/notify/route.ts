@@ -59,8 +59,15 @@ async function run(req: NextRequest) {
       await db.from("reminders").delete().eq("id", r.id);
       continue;
     }
-    const minutes = Math.max(1, Math.round((new Date(r.start_at).getTime() - now) / 60000));
-    const body = String(r.body ?? "").replace("{min}", String(minutes));
+    const minutes = Math.round((new Date(r.start_at).getTime() - now) / 60000);
+    // Si ya empezó (se agregó tarde), no se dice "en 1 min": se avisa que ya está en juego.
+    const body =
+      minutes >= 1
+        ? String(r.body ?? "").replace("{min}", String(minutes))
+        : String(r.body ?? "")
+            .replace(/^Dans \{min\} min/, "C'est maintenant")
+            .replace(/^En \{min\} min/, "Ahora")
+            .replace("{min}", "0");
     const res = await sendPush(s.sub, { title: r.title, body, url: r.url, tag: r.event_id, kind: "reminder" });
     if (res === "gone") {
       await db.from("push_subs").delete().eq("endpoint", r.endpoint);

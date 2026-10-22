@@ -179,7 +179,7 @@ export default function SettingsPage() {
         <div className="space-y-2 p-4 text-sm text-muted">
           <p>{t("sourcesNote")}</p>
           <p>
-            ESPN · football-data.org · Jolpica-F1 · OpenF1 · Open-Meteo
+            ESPN · Jolpica-F1 · ClubElo · Wikidata · football-data.org · Open-Meteo
           </p>
         </div>
       </Group>

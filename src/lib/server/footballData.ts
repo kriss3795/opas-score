@@ -28,6 +28,8 @@ export async function fdStandings(league: string): Promise<Standings | null> {
       drawn: r.draw,
       lost: r.lost,
       diff: r.goalDifference,
+      gf: r.goalsFor,
+      ga: r.goalsAgainst,
       points: r.points,
     })),
     source: "football-data.org",
