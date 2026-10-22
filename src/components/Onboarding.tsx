@@ -3,18 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/client/store";
-import { LEAGUES, SPORTS } from "@/lib/catalog";
-import type { DriverOption, SportId, TeamOption } from "@/lib/types";
-import { IconCheck, IconSearch, SportIcon } from "./Icons";
+import { LEAGUES, NOT_AVAILABLE, SPORTS, sportMeta, type Group } from "@/lib/catalog";
+import type { DriverOption, PlayerOption, SportId, TeamOption } from "@/lib/types";
+import { isStandalone, platform } from "@/lib/client/push";
+import { IconCheck, IconSearch } from "./Icons";
 import TeamLogo from "./TeamLogo";
 
-type Step = "sports" | "leagues" | "teams" | "drivers";
+type Step = "sports" | "leagues" | "teams" | "players" | "drivers";
 
 const norm = (s: string) =>
   s
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
+
+const GROUPS: Group[] = ["france", "europe", "intl", "americas", "world", "women"];
 
 export default function Onboarding({ editing = false }: { editing?: boolean }) {
   const { prefs, update, t, lang } = useApp();
@@ -23,22 +26,47 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
   const [leagues, setLeagues] = useState<string[]>(prefs.leagues);
   const [teams, setTeams] = useState<TeamOption[]>(prefs.teams);
   const [drivers, setDrivers] = useState<DriverOption[]>(prefs.drivers);
+  const [players, setPlayers] = useState<PlayerOption[]>(prefs.players ?? []);
   const [step, setStep] = useState<Step>("sports");
+  const [available, setAvailable] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    fetch("/api/catalog")
+      .then((r) => r.json())
+      .then((d) => setAvailable(d.available?.length ? new Set(d.available) : null))
+      .catch(() => setAvailable(null));
+  }, []);
+
+  const leagueSports = sports.filter((s) => ["team", "event"].includes(sportMeta(s).kind));
+  const teamSports = sports.filter((s) => sportMeta(s).kind === "team");
 
   const steps = useMemo<Step[]>(() => {
     const s: Step[] = ["sports"];
-    if (sports.includes("football")) s.push("leagues", "teams");
+    if (leagueSports.length) s.push("leagues");
+    if (teamSports.length) s.push("teams");
+    if (sports.includes("tennis")) s.push("players");
     if (sports.includes("f1")) s.push("drivers");
     return s;
-  }, [sports]);
+  }, [sports, leagueSports.length, teamSports.length]);
   const idx = steps.indexOf(step);
 
   const finish = () => {
-    update({ sports, leagues, teams, drivers, onboarded: true });
+    const keepSport = (sp?: SportId) => sports.includes(sp ?? "football");
+    update({
+      sports,
+      leagues: leagues.filter((l) => keepSport(LEAGUES.find((x) => x.id === l)?.sport)),
+      teams: teams.filter((tm) => keepSport(tm.sport)),
+      drivers: sports.includes("f1") ? drivers : [],
+      players: sports.includes("tennis") ? players : [],
+      onboarded: true,
+    });
     if (editing) router.push("/settings");
+    else if (platform() !== "desktop" && !isStandalone()) router.push("/install");
   };
   const next = () => (idx < steps.length - 1 ? setStep(steps[idx + 1]) : finish());
   const back = () => (idx > 0 ? setStep(steps[idx - 1]) : editing ? router.push("/settings") : undefined);
+
+  useEffect(() => window.scrollTo(0, 0), [step]);
 
   const toggle = <T,>(list: T[], item: T, eq: (a: T, b: T) => boolean) =>
     list.some((x) => eq(x, item)) ? list.filter((x) => !eq(x, item)) : [...list, item];
@@ -62,14 +90,14 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
                   <button
                     key={s.id}
                     onClick={() => setSports(toggle(sports, s.id, (a, b) => a === b))}
-                    className="relative flex aspect-[4/3] flex-col items-start justify-end rounded-3xl border-2 p-4 text-left transition-all active:scale-[0.97]"
+                    className="relative flex min-h-28 flex-col items-start justify-between gap-3 rounded-3xl border-2 p-4 text-left transition-all active:scale-[0.97]"
                     style={{
                       borderColor: on ? s.color : "var(--line)",
                       background: on ? `color-mix(in srgb, ${s.color} 16%, var(--card))` : "var(--card)",
                     }}
                   >
-                    <SportIcon sport={s.id} className="mb-auto h-9 w-9" />
-                    <span className="text-lg font-extrabold">{s.name[lang]}</span>
+                    <span className="text-4xl leading-none">{s.emoji}</span>
+                    <span className="text-[17px] leading-tight font-extrabold">{s.name[lang]}</span>
                     {on && (
                       <span className="absolute top-3 right-3 rounded-full p-1 text-white" style={{ background: s.color }}>
                         <IconCheck className="h-4 w-4" />
@@ -79,43 +107,66 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
                 );
               })}
             </div>
-            <p className="mt-6 text-sm text-muted">
-              {lang === "fr"
-                ? "D'autres sports (rugby, tennis, basket, MotoGP…) arrivent bientôt."
-                : "Pronto llegarán más deportes (rugby, tenis, básquetbol, MotoGP…)."}
-            </p>
+            <p className="mt-6 text-sm leading-relaxed text-muted">{NOT_AVAILABLE[lang]}</p>
           </section>
         )}
 
         {step === "leagues" && (
           <section>
             <Title title={t("chooseLeagues")} sub={t("chooseLeaguesSub")} />
-            {(["france", "europe", "intl", "world"] as const).map((g) => (
-              <div key={g} className="mb-5">
-                <h3 className="mb-2 text-xs font-bold tracking-wider text-muted uppercase">{t(g)}</h3>
-                <div className="overflow-hidden rounded-2xl bg-card">
-                  {LEAGUES.filter((l) => l.group === g).map((l) => {
-                    const on = leagues.includes(l.id);
+            {leagueSports.map((sp) => {
+              const meta = sportMeta(sp);
+              const list = LEAGUES.filter((l) => l.sport === sp && (!available || available.has(l.id)));
+              if (!list.length) return null;
+              return (
+                <div key={sp} className="mb-8">
+                  <h2 className="mb-3 flex items-center gap-2 text-xl font-extrabold" style={{ color: meta.color }}>
+                    <span>{meta.emoji}</span> {meta.name[lang]}
+                  </h2>
+                  {GROUPS.map((g) => {
+                    const items = list.filter((l) => l.group === g);
+                    if (!items.length) return null;
                     return (
-                      <button
-                        key={l.id}
-                        onClick={() => setLeagues(toggle(leagues, l.id, (a, b) => a === b))}
-                        className="flex w-full items-center gap-3 border-b border-line px-4 py-3.5 text-left last:border-0"
-                      >
-                        <span className="text-xl">{l.flag}</span>
-                        <span className="flex-1 font-semibold">{l.name[lang]}</span>
-                        <Check on={on} />
-                      </button>
+                      <div key={g} className="mb-4">
+                        {sp === "football" || sp === "rugby" ? (
+                          <h3 className="mb-2 text-xs font-bold tracking-wider text-muted uppercase">{t(g)}</h3>
+                        ) : null}
+                        <div className="overflow-hidden rounded-2xl bg-card">
+                          {items.map((l) => {
+                            const on = leagues.includes(l.id);
+                            return (
+                              <button
+                                key={l.id}
+                                onClick={() => setLeagues(toggle(leagues, l.id, (a, b) => a === b))}
+                                className="flex w-full items-center gap-3 border-b border-line px-4 py-3.5 text-left last:border-0"
+                              >
+                                <span className="text-xl">{l.flag}</span>
+                                <span className="flex-1 leading-snug font-semibold">{l.name[lang]}</span>
+                                <Check on={on} />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </section>
         )}
 
         {step === "teams" && (
-          <TeamPicker selected={teams} onToggle={(tm) => setTeams(toggle(teams, tm, (a, b) => a.id === b.id))} leagues={leagues} />
+          <TeamPicker
+            selected={teams}
+            onToggle={(tm) => setTeams(toggle(teams, tm, (a, b) => a.id === b.id && (a.sport ?? "football") === (b.sport ?? "football")))}
+            leagues={leagues}
+            sports={teamSports}
+          />
+        )}
+
+        {step === "players" && (
+          <PlayerPicker selected={players} onToggle={(p) => setPlayers(toggle(players, p, (a, b) => a.id === b.id && a.tour === b.tour))} />
         )}
 
         {step === "drivers" && (
@@ -123,7 +174,7 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
         )}
       </div>
 
-      <div className="pb-safe fixed inset-x-0 bottom-0 bg-gradient-to-t from-bg via-bg to-transparent pt-8">
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-bg via-bg to-transparent pt-8">
         <div className="mx-auto flex max-w-xl gap-3 px-5 pb-3">
           {(idx > 0 || editing) && (
             <button onClick={back} className="rounded-2xl bg-card px-6 py-4 font-bold">
@@ -146,7 +197,7 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
 function Title({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="mt-8 mb-6">
-      <h1 className="text-3xl font-extrabold tracking-tight">{title}</h1>
+      <h1 className="text-3xl leading-tight font-extrabold tracking-tight">{title}</h1>
       <p className="mt-2 text-muted">{sub}</p>
     </div>
   );
@@ -155,7 +206,7 @@ function Title({ title, sub }: { title: string; sub: string }) {
 function Check({ on }: { on: boolean }) {
   return (
     <span
-      className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${
         on ? "border-brand bg-brand text-white" : "border-line"
       }`}
     >
@@ -168,7 +219,7 @@ function SearchBox({ value, onChange, placeholder }: { value: string; onChange: 
   return (
     <div className="sticky top-0 z-10 -mx-5 bg-bg px-5 pt-2 pb-3">
       <div className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5">
-        <IconSearch className="h-5 w-5 text-muted" />
+        <IconSearch className="h-5 w-5 shrink-0 text-muted" />
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -177,7 +228,25 @@ function SearchBox({ value, onChange, placeholder }: { value: string; onChange: 
           autoCorrect="off"
           autoCapitalize="off"
         />
+        {value && (
+          <button onClick={() => onChange("")} className="text-muted">
+            ✕
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
+
+function SelectedChips<T>({ items, label, onRemove }: { items: T[]; label: (x: T) => React.ReactNode; onRemove: (x: T) => void }) {
+  if (!items.length) return null;
+  return (
+    <div className="mb-2 flex flex-wrap gap-2">
+      {items.map((x, i) => (
+        <button key={i} onClick={() => onRemove(x)} className="flex items-center gap-2 rounded-full bg-brand/15 py-1.5 pr-3 pl-1.5 text-sm font-semibold text-brand">
+          {label(x)} ✕
+        </button>
+      ))}
     </div>
   );
 }
@@ -186,15 +255,18 @@ function TeamPicker({
   selected,
   onToggle,
   leagues,
+  sports,
 }: {
   selected: TeamOption[];
   onToggle: (t: TeamOption) => void;
   leagues: string[];
+  sports: SportId[];
 }) {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const [all, setAll] = useState<TeamOption[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [q, setQ] = useState("");
+  const [sp, setSp] = useState<SportId | "all">("all");
 
   useEffect(() => {
     fetch("/api/teams")
@@ -203,43 +275,113 @@ function TeamPicker({
       .catch(() => setFailed(true));
   }, []);
 
+  const pool = useMemo(
+    () => (all ?? []).filter((tm) => sports.includes(tm.sport ?? "football") && (sp === "all" || (tm.sport ?? "football") === sp)),
+    [all, sports, sp],
+  );
+
   const results = useMemo(() => {
-    if (!all) return [];
     const nq = norm(q.trim());
-    if (nq) return all.filter((tm) => norm(tm.name).includes(nq) || norm(tm.short ?? "").includes(nq)).slice(0, 60);
-    // Sin búsqueda: equipos de las competiciones elegidas (o de Ligue 1 por defecto).
-    const pool = leagues.length ? leagues : ["fra.1"];
-    return all.filter((tm) => tm.leagues.some((l) => pool.includes(l))).slice(0, 80);
-  }, [all, q, leagues]);
+    if (nq) return pool.filter((tm) => norm(tm.name).includes(nq) || norm(tm.short ?? "").includes(nq)).slice(0, 80);
+    const chosen = leagues.length ? leagues : ["fra.1", "rugby.270559"];
+    return pool.filter((tm) => tm.leagues.some((l) => chosen.includes(l))).slice(0, 120);
+  }, [pool, q, leagues]);
+
+  const isOn = (tm: TeamOption) => selected.some((x) => x.id === tm.id && (x.sport ?? "football") === (tm.sport ?? "football"));
 
   return (
     <section>
       <Title title={t("chooseTeams")} sub={t("chooseTeamsSub")} />
-      {selected.length > 0 && (
-        <div className="no-scrollbar -mx-5 mb-2 flex gap-2 overflow-x-auto px-5">
-          {selected.map((tm) => (
-            <button key={tm.id} onClick={() => onToggle(tm)} className="flex shrink-0 items-center gap-2 rounded-full bg-brand/15 py-1.5 pr-3 pl-1.5 text-sm font-semibold text-brand">
-              <TeamLogo src={tm.logo} name={tm.name} size={22} />
-              {tm.short ?? tm.name} ✕
+      <SelectedChips
+        items={selected}
+        onRemove={onToggle}
+        label={(tm) => (
+          <>
+            <TeamLogo src={tm.logo} name={tm.name} size={22} />
+            {tm.short ?? tm.name}
+          </>
+        )}
+      />
+      <SearchBox value={q} onChange={setQ} placeholder={t("searchTeam")} />
+      {sports.length > 1 && (
+        <div className="no-scrollbar -mx-5 mb-3 flex gap-2 overflow-x-auto px-5">
+          {(["all", ...sports] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSp(s)}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-bold ${sp === s ? "bg-text text-bg" : "bg-card text-muted"}`}
+            >
+              {s === "all" ? (lang === "fr" ? "Tous" : "Todos") : `${sportMeta(s).emoji} ${sportMeta(s).name[lang]}`}
             </button>
           ))}
         </div>
       )}
-      <SearchBox value={q} onChange={setQ} placeholder={t("searchTeam")} />
       {failed && <p className="py-6 text-center text-muted">{t("dataError")}</p>}
       {!all && !failed && <p className="py-6 text-center text-muted">{t("loading")}</p>}
       {all && results.length === 0 && <p className="py-6 text-center text-muted">{t("noResult")}</p>}
       <div className="overflow-hidden rounded-2xl bg-card">
-        {results.map((tm) => {
-          const on = selected.some((x) => x.id === tm.id);
-          return (
-            <button key={tm.id} onClick={() => onToggle(tm)} className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-0">
-              <TeamLogo src={tm.logo} name={tm.name} size={32} />
-              <span className="flex-1 font-semibold">{tm.name}</span>
-              <Check on={on} />
+        {results.map((tm) => (
+          <button
+            key={`${tm.sport}:${tm.id}`}
+            onClick={() => onToggle(tm)}
+            className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-0"
+          >
+            <TeamLogo src={tm.logo} name={tm.name} size={32} />
+            <span className="flex-1">
+              <span className="block leading-snug font-semibold">{tm.name}</span>
+              {sports.length > 1 && <span className="text-xs text-muted">{sportMeta(tm.sport ?? "football").emoji} {sportMeta(tm.sport ?? "football").name[lang]}</span>}
+            </span>
+            <Check on={isOn(tm)} />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PlayerPicker({ selected, onToggle }: { selected: PlayerOption[]; onToggle: (p: PlayerOption) => void }) {
+  const { t } = useApp();
+  const [all, setAll] = useState<PlayerOption[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [q, setQ] = useState("");
+  const [tour, setTour] = useState("atp");
+  useEffect(() => {
+    fetch("/api/tennis/players")
+      .then((r) => r.json())
+      .then((d) => (d.failed ? setFailed(true) : setAll(d.players ?? [])))
+      .catch(() => setFailed(true));
+  }, []);
+  const results = useMemo(() => {
+    const nq = norm(q.trim());
+    return (all ?? []).filter((p) => (nq ? norm(p.name).includes(nq) : p.tour === tour));
+  }, [all, q, tour]);
+  return (
+    <section>
+      <Title title={t("choosePlayers")} sub={t("choosePlayersSub")} />
+      <SelectedChips items={selected} onRemove={onToggle} label={(p) => <>🎾 {p.name}</>} />
+      <SearchBox value={q} onChange={setQ} placeholder={t("searchPlayer")} />
+      {!q && (
+        <div className="mb-3 flex gap-2">
+          {["atp", "wta"].map((x) => (
+            <button key={x} onClick={() => setTour(x)} className={`rounded-full px-4 py-1.5 text-sm font-bold uppercase ${tour === x ? "bg-text text-bg" : "bg-card text-muted"}`}>
+              {x}
             </button>
-          );
-        })}
+          ))}
+        </div>
+      )}
+      {failed && <p className="py-6 text-center text-muted">{t("dataError")}</p>}
+      {!all && !failed && <p className="py-6 text-center text-muted">{t("loading")}</p>}
+      <div className="overflow-hidden rounded-2xl bg-card">
+        {results.map((p) => (
+          <button key={`${p.tour}:${p.id}`} onClick={() => onToggle(p)} className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-0">
+            <span className="font-score w-8 text-center text-lg font-bold text-muted">{p.rank}</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {p.flag ? <img src={p.flag} alt="" className="h-4 w-6 rounded-sm object-cover" /> : <span className="w-6" />}
+            <span className="flex-1 leading-snug font-semibold">{p.name}</span>
+            <span className="text-xs font-bold text-muted uppercase">{p.tour}</span>
+            <Check on={selected.some((x) => x.id === p.id && x.tour === p.tour)} />
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -267,19 +409,16 @@ function DriverPicker({ selected, onToggle }: { selected: DriverOption[]; onTogg
       {failed && <p className="py-6 text-center text-muted">{t("dataError")}</p>}
       {!all && !failed && <p className="py-6 text-center text-muted">{t("loading")}</p>}
       <div className="overflow-hidden rounded-2xl bg-card">
-        {results.map((d) => {
-          const on = selected.some((x) => x.id === d.id);
-          return (
-            <button key={d.id} onClick={() => onToggle(d)} className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-0">
-              <span className="font-score w-10 text-center text-2xl font-extrabold text-f1">{d.number ?? ""}</span>
-              <span className="flex-1">
-                <span className="block font-semibold">{d.name}</span>
-                {d.team && <span className="block text-sm text-muted">{d.team}</span>}
-              </span>
-              <Check on={on} />
-            </button>
-          );
-        })}
+        {results.map((d) => (
+          <button key={d.id} onClick={() => onToggle(d)} className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-0">
+            <span className="font-score w-10 text-center text-2xl font-extrabold text-f1">{d.number ?? ""}</span>
+            <span className="flex-1">
+              <span className="block leading-snug font-semibold">{d.name}</span>
+              {d.team && <span className="block text-sm text-muted">{d.team}</span>}
+            </span>
+            <Check on={selected.some((x) => x.id === d.id)} />
+          </button>
+        ))}
       </div>
     </section>
   );

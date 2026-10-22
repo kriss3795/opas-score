@@ -1,6 +1,18 @@
 // Interfaz común que comparten todos los módulos de deporte.
 
-export type SportId = "football" | "f1";
+export type SportId =
+  | "football"
+  | "f1"
+  | "rugby"
+  | "tennis"
+  | "basketball"
+  | "hockey"
+  | "nfl"
+  | "baseball"
+  | "afl"
+  | "golf"
+  | "mma"
+  | "motorsport";
 
 export type EventStatus = "pre" | "in" | "post" | "cancelled";
 
@@ -11,6 +23,7 @@ export interface Side {
   logo?: string;
   score?: string;
   winner?: boolean;
+  sets?: string[]; // tenis: juegos por set
 }
 
 export interface SportEvent {
@@ -25,6 +38,7 @@ export interface SportEvent {
   home?: Side;
   away?: Side;
   venue?: string;
+  round?: string; // ronda (tenis, copas)
   link?: string; // ruta interna de detalle
   source: string; // nombre de la fuente de datos
 }
@@ -53,6 +67,7 @@ export interface Standings {
 
 export interface TeamOption {
   id: string;
+  sport?: SportId; // ausente en preferencias antiguas = fútbol
   name: string;
   short?: string;
   logo?: string;
@@ -68,11 +83,20 @@ export interface DriverOption {
   team?: string;
 }
 
+export interface PlayerOption {
+  id: string;
+  name: string;
+  flag?: string;
+  tour: string; // atp | wta
+  rank?: number;
+}
+
 export interface Prefs {
   sports: SportId[];
   leagues: string[]; // ids de competiciones de fútbol seguidas
   teams: TeamOption[];
   drivers: DriverOption[];
+  players: PlayerOption[];
   important: string[]; // ids de eventos marcados con aviso
   lang: "fr" | "es" | null; // null = idioma del teléfono
   theme: "dark" | "light";
@@ -85,6 +109,7 @@ export const DEFAULT_PREFS: Prefs = {
   leagues: [],
   teams: [],
   drivers: [],
+  players: [],
   important: [],
   lang: null,
   theme: "dark",

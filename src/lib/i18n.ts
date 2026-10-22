@@ -3,8 +3,8 @@ export type Lang = "fr" | "es";
 const dict = {
   appName: { fr: "Opa's Score", es: "Opa's Score" },
   welcome: {
-    fr: "Pour toi, qui ne rates jamais un Grand Prix ni un match. Une app faite rien que pour toi, pour vivre chaque course et chaque but encore plus fort.",
-    es: "Para ti, que no te pierdes ni un Gran Premio ni un partido. Una app hecha solo para ti, para vivir cada carrera y cada gol con más emoción.",
+    fr: "Pour toi, Richy, une app pensée pour le meilleur des grands-pères…",
+    es: "Para ti, Richy, una app pensada en el mejor abuelo…",
   },
   welcomeSign: {
     fr: "Avec toute notre affection, Kriss et Vale (et bientôt Falco).",
@@ -22,6 +22,17 @@ const dict = {
   chooseTeamsSub: { fr: "Cherche tes clubs et sélections préférés.", es: "Busca tus clubes y selecciones favoritos." },
   chooseDrivers: { fr: "Tes pilotes", es: "Tus pilotos" },
   chooseDriversSub: { fr: "Tes pilotes préférés seront mis en avant.", es: "Tus pilotos favoritos aparecerán destacados." },
+  choosePlayers: { fr: "Tes joueurs de tennis", es: "Tus tenistas" },
+  choosePlayersSub: { fr: "Tu verras tous leurs matchs.", es: "Verás todos sus partidos." },
+  searchPlayer: { fr: "Rechercher un joueur ou une joueuse…", es: "Buscar un jugador o jugadora…" },
+  americas: { fr: "Amériques", es: "Américas" },
+  women: { fr: "Football féminin", es: "Fútbol femenino" },
+  eventsOf: { fr: "Événements", es: "Eventos" },
+  leaderboard: { fr: "Classement", es: "Clasificación" },
+  fightCard: { fr: "Carte des combats", es: "Cartelera" },
+  installShort: { fr: "Installer", es: "Instalar" },
+  installCta: { fr: "Installe l'app sur ton téléphone", es: "Instala la app en tu teléfono" },
+  installCtaSub: { fr: "Comme une vraie app, avec les notifications.", es: "Como una app de verdad, con notificaciones." },
   searchTeam: { fr: "Rechercher une équipe…", es: "Buscar un equipo…" },
   searchDriver: { fr: "Rechercher un pilote…", es: "Buscar un piloto…" },
   noResult: { fr: "Aucun résultat", es: "Sin resultados" },

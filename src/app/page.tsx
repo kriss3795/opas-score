@@ -19,7 +19,7 @@ export default function Home() {
     setShowInstall(!isStandalone() && platform() !== "desktop");
   }, []);
 
-  const favIds = useMemo(() => new Set(prefs.teams.map((x) => x.id)), [prefs.teams]);
+  const favIds = useMemo(() => new Set(prefs.teams.map((x) => `${x.sport ?? "football"}:${x.id}`)), [prefs.teams]);
 
   const groups = useMemo(() => {
     if (!events) return null;
@@ -52,9 +52,17 @@ export default function Home() {
       </header>
 
       {showInstall && (
-        <Link href="/install" className="mb-4 flex items-center justify-between rounded-2xl bg-brand2/15 px-4 py-3 text-sm font-semibold text-brand2">
-          {t("installTitle")}
-          <span aria-hidden>→</span>
+        <Link
+          href="/install"
+          className="mb-5 flex items-center gap-4 rounded-3xl p-4 text-white shadow-lg active:scale-[0.99]"
+          style={{ background: "linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand2) 85%, black))" }}
+        >
+          <span className="text-4xl">📲</span>
+          <span className="flex-1">
+            <span className="block text-lg leading-tight font-extrabold">{t("installCta")}</span>
+            <span className="block text-sm opacity-90">{t("installCtaSub")}</span>
+          </span>
+          <span className="rounded-full bg-white px-3 py-1.5 text-sm font-extrabold text-black">{t("installShort")}</span>
         </Link>
       )}
 

@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useApp } from "@/lib/client/store";
 import { registerSW } from "@/lib/client/push";
 import Welcome from "./Welcome";
+import { sportMeta } from "@/lib/catalog";
 import Onboarding from "./Onboarding";
 import { IconCalendar, IconF1, IconSettings, IconTable } from "./Icons";
 
@@ -23,12 +24,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const tabs = [
     { href: "/", label: t("tabProgramme"), icon: IconCalendar, show: true },
-    { href: "/tables", label: t("tabTables"), icon: IconTable, show: prefs.sports.includes("football") },
+    { href: "/tables", label: t("tabTables"), icon: IconTable, show: prefs.sports.some((x) => sportMeta(x).kind === "team") },
     { href: "/gp", label: t("tabGP"), icon: IconF1, show: prefs.sports.includes("f1") },
     { href: "/settings", label: t("tabSettings"), icon: IconSettings, show: true },
   ].filter((x) => x.show);
 
-  const active = (href: string) => (href === "/" ? path === "/" || path.startsWith("/match") : path.startsWith(href));
+  const active = (href: string) => (href === "/" ? path === "/" || path.startsWith("/match") || path.startsWith("/event") : path.startsWith(href));
 
   return (
     <div className="mx-auto min-h-dvh max-w-xl">

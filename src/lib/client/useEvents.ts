@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "./store";
 import type { SportEvent } from "../types";
+import { leagueMeta } from "../catalog";
 
 // Agenda personal: pide al servidor solo lo que el usuario sigue y se refresca solo.
 export function useAgenda() {
@@ -14,12 +15,20 @@ export function useAgenda() {
 
   const url = (() => {
     const p = new URLSearchParams();
-    if (prefs.sports.includes("football")) {
-      p.set("leagues", prefs.leagues.join(","));
-      p.set("teams", prefs.teams.map((t) => t.id).join(","));
-      p.set("teamLeagues", Array.from(new Set(prefs.teams.flatMap((t) => t.leagues))).join(","));
+    const on = (sp: string) => prefs.sports.includes(sp as never);
+    const leagues = prefs.leagues.filter((l) => on(leagueMeta(l)?.sport ?? "football"));
+    const teams = prefs.teams.filter((t) => on(t.sport ?? "football"));
+    if (leagues.length) p.set("leagues", leagues.join(","));
+    if (teams.length) {
+      p.set("teams", teams.map((t) => `${t.sport ?? "football"}:${t.id}`).join(","));
+      p.set("teamLeagues", Array.from(new Set(teams.flatMap((t) => t.leagues))).join(","));
     }
-    if (prefs.sports.includes("f1")) p.set("f1", "1");
+    if (on("f1")) p.set("f1", "1");
+    const players = on("tennis") ? prefs.players ?? [] : [];
+    if (players.length) {
+      p.set("players", players.map((x) => `${x.tour}:${x.id}`).join(","));
+      p.set("playerNames", players.map((x) => x.name).join(","));
+    }
     return `/api/agenda?${p.toString()}`;
   })();
 

@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/client/store";
-import { LEAGUES, leagueMeta } from "@/lib/catalog";
-import type { Standings } from "@/lib/types";
+import { LEAGUES, leagueMeta, sportMeta } from "@/lib/catalog";
+import type { Standings, StandingRow } from "@/lib/types";
 import TeamLogo from "@/components/TeamLogo";
 
 // Las zonas vienen en inglés desde ESPN: se traducen las más comunes.
@@ -31,12 +31,15 @@ export default function TablesPage() {
   const { t, lang, prefs } = useApp();
   const options = useMemo(() => {
     const ids = new Set([...prefs.leagues, ...prefs.teams.flatMap((x) => x.leagues)]);
-    const list = LEAGUES.filter((l) => ids.has(l.id) && !l.cup);
+    const list = LEAGUES.filter(
+      (l) => ids.has(l.id) && !l.cup && l.kind !== "event" && prefs.sports.includes(l.sport),
+    );
     return list.length ? list : LEAGUES.filter((l) => l.id === "fra.1");
   }, [prefs.leagues, prefs.teams]);
   const [sel, setSel] = useState(options[0]?.id);
   const [data, setData] = useState<Standings | null | undefined>(undefined);
-  const fav = useMemo(() => new Set(prefs.teams.map((x) => x.id)), [prefs.teams]);
+  const fav = useMemo(() => new Set(prefs.teams.map((x) => `${x.sport ?? "football"}:${x.id}`)), [prefs.teams]);
+  const sport = leagueMeta(sel ?? "")?.sport ?? "football";
   const favNames = useMemo(() => new Set(prefs.teams.map((x) => x.name)), [prefs.teams]);
 
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function TablesPage() {
             onClick={() => setSel(l.id)}
             className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${sel === l.id ? "bg-text text-bg" : "bg-card text-muted"}`}
           >
-            {l.flag} {l.name[lang]}
+            {sportMeta(l.sport).emoji} {l.name[lang]}
           </button>
         ))}
       </div>
@@ -79,11 +82,11 @@ export default function TablesPage() {
                 <span className="w-6 text-center">#</span>
                 <span className="flex-1">{leagueMeta(data.competitionId)?.name[lang]}</span>
                 <span className="w-7 text-center">{t("played")}</span>
-                <span className="w-9 text-center">{t("diff")}</span>
-                <span className="w-9 text-center">{t("points")}</span>
+                <span className="w-9 text-center">{sport === "basketball" ? (lang === "fr" ? "D" : "P") : t("diff")}</span>
+                <span className="w-9 text-center">{sport === "basketball" ? (lang === "fr" ? "V" : "G") : t("points")}</span>
               </div>
               {data.rows.map((r) => {
-                const isFav = (r.teamId && fav.has(r.teamId)) || favNames.has(r.name);
+                const isFav = (r.teamId && fav.has(`${sport}:${r.teamId}`)) || favNames.has(r.name);
                 return (
                   <div
                     key={`${r.rank}-${r.name}`}
@@ -92,10 +95,10 @@ export default function TablesPage() {
                   >
                     <span className="font-score w-6 text-center text-lg font-bold text-muted">{r.rank}</span>
                     <TeamLogo src={r.logo} name={r.name} size={22} />
-                    <span className={`flex-1 truncate ${isFav ? "font-extrabold" : "font-medium"}`}>{r.name}</span>
+                    <span className={`min-w-0 flex-1 leading-tight break-words ${isFav ? "font-extrabold" : "font-medium"}`}>{r.name}</span>
                     <span className="w-7 text-center text-sm text-muted">{r.played ?? ""}</span>
                     <span className="w-9 text-center text-sm text-muted">
-                      {r.diff === undefined ? "" : r.diff > 0 ? `+${r.diff}` : r.diff}
+                      {sport === "basketball" ? r.lost ?? "" : r.diff === undefined ? "" : r.diff > 0 ? `+${r.diff}` : r.diff}
                     </span>
                     <span className="font-score w-9 text-center text-xl font-extrabold">{r.points}</span>
                   </div>
@@ -112,6 +115,7 @@ export default function TablesPage() {
                 ))}
               </div>
             )}
+            <LeagueMath data={data} />
             <a href={data.sourceUrl} target="_blank" rel="noreferrer" className="mt-4 block px-1 text-xs text-muted underline">
               {t("source")} : {data.source}
             </a>
@@ -119,5 +123,66 @@ export default function TablesPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// Calculadora con datos reales: quién puede ser campeón y quién está descendido o salvado.
+// Solo para ligas de fútbol a doble vuelta (3 puntos por victoria), donde el cálculo es exacto.
+const MATH_LEAGUES = new Set(["fra.1", "fra.2", "eng.1", "eng.2", "esp.1", "ita.1", "ger.1", "ger.2", "por.1", "ned.1", "bel.1", "tur.1", "chi.1", "bra.1", "ita.2", "esp.2"]);
+
+function LeagueMath({ data }: { data: Standings }) {
+  const { lang } = useApp();
+  if (!MATH_LEAGUES.has(data.competitionId)) return null;
+  const rows = data.rows;
+  const n = rows.length;
+  const G = 2 * (n - 1);
+  if (n < 6 || rows.some((r) => r.played === undefined || r.played > G)) return null;
+  const maxOf = (r: StandingRow) => r.points + 3 * (G - (r.played ?? 0));
+  const leader = rows[0];
+  const contenders = rows.filter((r) => maxOf(r) >= leader.points);
+  const champion = contenders.length === 1;
+  const relIdx = rows.findIndex((r) => /relegat/i.test(r.note?.description ?? ""));
+  const safePlaces = relIdx > 0 ? relIdx : -1;
+  const relegated = safePlaces > 0 ? rows.filter((r, i) => i >= safePlaces && maxOf(r) < rows[safePlaces - 1].points) : [];
+  const safe =
+    safePlaces > 0 ? rows.filter((r) => rows.filter((o) => o !== r && maxOf(o) >= r.points).length < safePlaces) : [];
+  const left = G - Math.min(...rows.map((r) => r.played ?? 0));
+  if (left <= 0 && !champion) return null;
+  const fr = lang === "fr";
+  return (
+    <section className="mt-4 rounded-2xl bg-card p-4">
+      <h3 className="font-bold">{fr ? "Qui peut encore être champion ?" : "¿Quién puede ser campeón todavía?"}</h3>
+      {champion ? (
+        <p className="mt-2 text-lg font-extrabold text-gold">🏆 {leader.name}</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {contenders.map((r) => (
+            <li key={r.name} className="flex items-center gap-2 text-sm">
+              <TeamLogo src={r.logo} name={r.name} size={18} />
+              <span className="flex-1 leading-tight font-semibold">{r.name}</span>
+              <span className="text-muted">
+                {r === leader ? (fr ? "leader" : "líder") : `−${leader.points - r.points} pts`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {safePlaces > 0 && (
+        <p className="mt-4 text-sm text-muted">
+          {fr ? "Maintien assuré" : "Salvados matemáticamente"} : <b className="text-text">{safe.length}</b>
+          {relegated.length > 0 && (
+            <>
+              {" · "}
+              {fr ? "Relégués" : "Descendidos"} : <b className="text-live">{relegated.map((r) => r.name).join(", ")}</b>
+            </>
+          )}
+        </p>
+      )}
+      <p className="mt-3 text-xs text-muted">
+        {fr
+          ? `Calcul : 3 pts par victoire, ${G} journées au total ; on compare les points maximum possibles de chaque équipe.`
+          : `Cálculo: 3 pts por victoria, ${G} fechas en total; se comparan los puntos máximos posibles de cada equipo.`}
+      </p>
+    </section>
   );
 }

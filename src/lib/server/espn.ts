@@ -1,6 +1,6 @@
 import "server-only";
 import { getJson, ymd } from "./http";
-import type { SportEvent, Standings, StandingRow, TeamOption, EventStatus } from "../types";
+import type { SportEvent, Standings, StandingRow, TeamOption, EventStatus, PlayerOption } from "../types";
 import { leagueMeta, LEAGUES } from "../catalog";
 
 // API no oficial de ESPN: puede cambiar sin aviso. Todo se lee de forma defensiva.
@@ -26,13 +26,23 @@ function logoOf(team: any): string | undefined {
   return team?.logo || team?.logos?.[0]?.href;
 }
 
+// Nombre corto para tarjetas (evita nombres cortados en el teléfono).
+function shortName(team: any): string | undefined {
+  const s = team?.shortDisplayName;
+  if (s && s.length <= 16) return s;
+  return team?.name && team.name.length <= 16 ? team.name : s ?? team?.abbreviation;
+}
+
 // ESPN no siempre acepta rangos de fechas en fútbol: se intenta una vez y, si falla,
 // se piden los días uno por uno (cada día con su propia caché).
 let rangeWorks: boolean | null = null;
 
-export async function soccerScoreboard(league: string, from: Date, to: Date): Promise<SportEvent[] | null> {
+export async function teamScoreboard(league: string, from: Date, to: Date): Promise<SportEvent[] | null> {
+  const meta = leagueMeta(league);
+  if (!meta) return null;
+  const path = meta.path;
   if (rangeWorks !== false) {
-    const url = `${SITE}/soccer/${league}/scoreboard?dates=${ymd(from)}-${ymd(to)}&limit=300`;
+    const url = `${SITE}/${path}/scoreboard?dates=${ymd(from)}-${ymd(to)}&limit=300`;
     const data = await getJson<any>(url, 60);
     if (data?.events) {
       rangeWorks = true;
@@ -47,7 +57,7 @@ export async function soccerScoreboard(league: string, from: Date, to: Date): Pr
     days.map((d) => {
       const key = ymd(d);
       const reval = key === today ? 30 : key < today ? 3600 : 900;
-      return getJson<any>(`${SITE}/soccer/${league}/scoreboard?dates=${key}`, reval);
+      return getJson<any>(`${SITE}/${path}/scoreboard?dates=${key}`, reval);
     }),
   );
   if (results.every((r) => r === null)) return null;
@@ -68,6 +78,27 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
   const meta = leagueMeta(league);
   const leagueName = meta?.name.fr ?? data?.leagues?.[0]?.name ?? league;
   const out: SportEvent[] = [];
+  if (meta?.kind === "event") {
+    // Torneos, veladas y carreras: un evento por fecha, sin rivales.
+    for (const ev of data.events ?? []) {
+      const comp = ev.competitions?.[0];
+      const { status, detail } = mapStatus(comp?.status ?? ev.status);
+      out.push({
+        id: String(ev.id),
+        sport: meta.sport,
+        competitionId: league,
+        competitionName: leagueName,
+        start: ev.date,
+        status,
+        statusDetail: detail,
+        title: ev.name,
+        venue: comp?.venue?.fullName ?? ev.circuit?.fullName,
+        link: `/event/${league}/${ev.id}?d=${String(ev.date).slice(0, 10).replace(/-/g, "")}`,
+        source: "ESPN",
+      });
+    }
+    return out;
+  }
   for (const ev of data.events ?? []) {
     const comp = ev.competitions?.[0];
     if (!comp) continue;
@@ -78,7 +109,7 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
     const { status, detail } = mapStatus(comp.status ?? ev.status);
     out.push({
       id: String(ev.id),
-      sport: "football",
+      sport: meta?.sport ?? "football",
       competitionId: league,
       competitionName: leagueName,
       start: ev.date,
@@ -87,7 +118,7 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
       home: {
         id: String(h.team?.id ?? ""),
         name: h.team?.displayName ?? "?",
-        short: h.team?.shortDisplayName ?? h.team?.abbreviation,
+        short: shortName(h.team),
         logo: logoOf(h.team),
         score: status === "pre" ? undefined : h.score,
         winner: h.winner,
@@ -95,33 +126,36 @@ function parseScoreboard(league: string, data: any): SportEvent[] {
       away: {
         id: String(a.team?.id ?? ""),
         name: a.team?.displayName ?? "?",
-        short: a.team?.shortDisplayName ?? a.team?.abbreviation,
+        short: shortName(a.team),
         logo: logoOf(a.team),
         score: status === "pre" ? undefined : a.score,
         winner: a.winner,
       },
       venue: comp.venue?.fullName,
-      link: `/match/${league}/${ev.id}`,
+      link: meta?.sport === "basketball" ? undefined : `/match/${league}/${ev.id}`,
       source: "ESPN",
     });
   }
   return out;
 }
 
-export async function soccerStandings(league: string): Promise<Standings | null> {
-  const url = `${V2}/soccer/${league}/standings`;
+export async function teamStandings(league: string): Promise<Standings | null> {
+  const meta = leagueMeta(league);
+  if (!meta) return null;
+  const url = `${V2}/${meta.path}/standings`;
   const data = await getJson<any>(url, 900);
   if (!data) return null;
   const groups: any[] = data.children?.length ? data.children : [data];
   const g = groups[0];
   const entries: any[] = g?.standings?.entries ?? [];
   if (!entries.length) return null;
+  const isNBA = meta.sport === "basketball";
   const stat = (e: any, n: string) => {
     const s = (e.stats ?? []).find((x: any) => x.name === n);
     return s ? Number(s.value) : undefined;
   };
   const rows: StandingRow[] = entries.map((e) => ({
-    rank: stat(e, "rank") ?? 0,
+    rank: stat(e, "rank") ?? stat(e, "playoffSeed") ?? 0,
     teamId: String(e.team?.id ?? ""),
     name: e.team?.displayName ?? "?",
     logo: logoOf(e.team),
@@ -129,30 +163,34 @@ export async function soccerStandings(league: string): Promise<Standings | null>
     won: stat(e, "wins"),
     drawn: stat(e, "ties"),
     lost: stat(e, "losses"),
-    diff: stat(e, "pointDifferential"),
-    points: stat(e, "points") ?? 0,
+    diff: stat(e, "pointDifferential") ?? stat(e, "differential"),
+    points: isNBA ? stat(e, "wins") ?? 0 : stat(e, "points") ?? 0,
     note: e.note ? { color: e.note.color, description: e.note.description } : undefined,
   }));
-  rows.sort((a, b) => a.rank - b.rank);
+  if (isNBA) rows.sort((a, b) => b.points - a.points || (a.lost ?? 0) - (b.lost ?? 0)).forEach((r, i) => (r.rank = i + 1));
+  else rows.sort((a, b) => a.rank - b.rank);
   return {
     competitionId: league,
-    competitionName: leagueMeta(league)?.name.fr ?? data.name ?? league,
+    competitionName: meta.name.fr,
     rows,
     source: "ESPN",
-    sourceUrl: `https://www.espn.com/soccer/standings/_/league/${league}`,
+    sourceUrl: `https://www.espn.com/${meta.path.split("/")[0]}/standings`,
   };
 }
 
-export async function soccerTeams(league: string): Promise<TeamOption[] | null> {
-  const data = await getJson<any>(`${SITE}/soccer/${league}/teams`, 86400);
+export async function teamsOf(league: string): Promise<TeamOption[] | null> {
+  const meta = leagueMeta(league);
+  if (!meta) return null;
+  const data = await getJson<any>(`${SITE}/${meta.path}/teams`, 86400);
   if (!data) return null;
   const teams: any[] = data.sports?.[0]?.leagues?.[0]?.teams ?? [];
   return teams.map((w) => {
     const tm = w.team ?? w;
     return {
       id: String(tm.id),
+      sport: meta.sport,
       name: tm.displayName,
-      short: tm.shortDisplayName,
+      short: shortName(tm),
       logo: logoOf(tm),
       leagues: [league],
     };
@@ -160,21 +198,129 @@ export async function soccerTeams(league: string): Promise<TeamOption[] | null> 
 }
 
 // Lista gigante: une los equipos de todas las competiciones del catálogo.
-export async function allSoccerTeams(): Promise<TeamOption[]> {
-  const results = await Promise.all(LEAGUES.map((l) => soccerTeams(l.id)));
+export async function allTeams(): Promise<TeamOption[]> {
+  const results = await Promise.all(LEAGUES.map((l) => teamsOf(l.id)));
   const map = new Map<string, TeamOption>();
   results.forEach((list) => {
     for (const tm of list ?? []) {
-      const prev = map.get(tm.id);
+      const key = `${tm.sport}:${tm.id}`;
+      const prev = map.get(key);
       if (prev) prev.leagues = Array.from(new Set([...prev.leagues, ...tm.leagues]));
-      else map.set(tm.id, { ...tm });
+      else map.set(key, { ...tm });
     }
   });
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function soccerSummary(league: string, id: string) {
-  return getJson<any>(`${SITE}/soccer/${league}/summary?event=${encodeURIComponent(id)}`, 30);
+// Detalle de un evento (golf, MMA, carreras): clasificación o cartelera.
+export async function eventDetail(league: string, id: string, day: string) {
+  const meta = leagueMeta(league);
+  if (!meta || !/^\d{8}$/.test(day)) return null;
+  const d = await getJson<any>(`${SITE}/${meta.path}/scoreboard?dates=${day}`, 60);
+  const ev = (d?.events ?? []).find((e: any) => String(e.id) === id);
+  if (!ev) return null;
+  const comps: any[] = ev.competitions ?? [];
+  const athlete = (c: any) => ({
+    name: c.athlete?.displayName ?? c.team?.displayName ?? "?",
+    flag: typeof c.athlete?.flag === "string" ? c.athlete.flag : c.athlete?.flag?.href,
+    winner: Boolean(c.winner),
+    record: c.records?.[0]?.summary,
+    score: typeof c.score === "object" ? c.score?.displayValue : c.score,
+    order: Number(c.order),
+  });
+  const isFightCard = comps.length > 1 && comps.every((c) => (c.competitors ?? []).length === 2);
+  return {
+    name: ev.name,
+    start: ev.date,
+    end: ev.endDate,
+    venue: comps[0]?.venue?.fullName ?? ev.circuit?.fullName,
+    state: (comps[0]?.status ?? ev.status)?.type?.state ?? "pre",
+    fights: isFightCard
+      ? comps.map((c) => ({
+          weight: c.type?.abbreviation ?? c.type?.text,
+          status: c.status?.type?.state,
+          detail: c.status?.type?.shortDetail,
+          a: athlete(c.competitors[0]),
+          b: athlete(c.competitors[1]),
+        }))
+      : [],
+    leaderboard: !isFightCard
+      ? (comps[comps.length - 1]?.competitors ?? comps[0]?.competitors ?? [])
+          .map(athlete)
+          .filter((x: any) => Number.isFinite(x.order))
+          .sort((a: any, b: any) => a.order - b.order)
+          .slice(0, 30)
+      : [],
+    sourceUrl: `https://www.espn.com/${meta.path.split("/")[0]}/`,
+  };
+}
+
+export async function eventSummary(league: string, id: string) {
+  const meta = leagueMeta(league);
+  if (!meta) return null;
+  return getJson<any>(`${SITE}/${meta.path}/summary?event=${encodeURIComponent(id)}`, 30);
+}
+
+// ---------- Tenis ----------
+
+export async function tennisRankings(tour: string): Promise<PlayerOption[] | null> {
+  const d = await getJson<any>(`${SITE}/tennis/${tour}/rankings`, 86400);
+  const ranks: any[] = d?.rankings?.[0]?.ranks ?? [];
+  if (!ranks.length) return null;
+  return ranks.map((r) => ({
+    id: String(r.athlete?.id ?? ""),
+    name: r.athlete?.displayName ?? "?",
+    flag: typeof r.athlete?.flag === "string" ? r.athlete.flag : r.athlete?.flag?.href,
+    tour,
+    rank: Number(r.current),
+  }));
+}
+
+// Partidos de individuales de los torneos en curso, filtrados por jugadores favoritos.
+export async function tennisMatches(tour: string, playerIds: Set<string>, playerNames: Set<string>, from: Date, to: Date): Promise<SportEvent[] | null> {
+  const d = await getJson<any>(`${SITE}/tennis/${tour}/scoreboard`, 60);
+  if (!d) return null;
+  const out: SportEvent[] = [];
+  for (const ev of d.events ?? []) {
+    for (const g of ev.groupings ?? []) {
+      const slug: string = g.grouping?.slug ?? g.grouping?.displayName ?? "";
+      if (!/singles/i.test(slug)) continue;
+      for (const c of g.competitions ?? []) {
+        const t = new Date(c.date ?? c.startDate);
+        if (isNaN(t.getTime()) || t < from || t > to) continue;
+        const cs: any[] = c.competitors ?? [];
+        if (cs.length < 2) continue;
+        const ids = cs.map((x) => String(x.id ?? x.athlete?.id ?? ""));
+        const names = cs.map((x) => x.athlete?.displayName ?? "");
+        if (!ids.some((i) => playerIds.has(i)) && !names.some((n) => playerNames.has(n))) continue;
+        const { status, detail } = mapStatus(c.status);
+        const side = (x: any) => ({
+          id: String(x.id ?? x.athlete?.id ?? ""),
+          name: x.athlete?.displayName ?? "?",
+          short: x.athlete?.shortName,
+          logo: typeof x.athlete?.flag === "string" ? x.athlete.flag : x.athlete?.flag?.href,
+          winner: x.winner,
+          sets: (x.linescores ?? []).map((l: any) => `${l.value ?? ""}${l.tiebreak !== undefined ? `⁽${l.tiebreak}⁾` : ""}`),
+        });
+        const [a, b] = [cs.find((x) => x.order === 1) ?? cs[0], cs.find((x) => x.order === 2) ?? cs[1]];
+        out.push({
+          id: `tennis-${c.id}`,
+          sport: "tennis",
+          competitionId: tour,
+          competitionName: ev.name ?? tour.toUpperCase(),
+          start: c.date ?? c.startDate,
+          status,
+          statusDetail: detail,
+          round: c.round?.displayName,
+          home: side(a),
+          away: side(b),
+          venue: c.venue?.fullName,
+          source: "ESPN",
+        });
+      }
+    }
+  }
+  return out;
 }
 
 // F1 en vivo: posiciones de la sesión en curso según ESPN.

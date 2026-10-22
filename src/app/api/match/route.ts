@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { soccerSummary } from "@/lib/server/espn";
+import { eventSummary } from "@/lib/server/espn";
 import { leagueMeta } from "@/lib/catalog";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const league = req.nextUrl.searchParams.get("league") ?? "";
   const id = req.nextUrl.searchParams.get("id") ?? "";
   if (!leagueMeta(league) || !/^\d+$/.test(id)) return NextResponse.json({ error: "bad request" }, { status: 400 });
-  const d = await soccerSummary(league, id);
+  const d = await eventSummary(league, id);
   if (!d) return NextResponse.json({ match: null });
 
   const comp = d.header?.competitions?.[0];
@@ -104,7 +104,8 @@ export async function GET(req: NextRequest) {
         h2h: h2hUnique,
         venue: d.gameInfo?.venue?.fullName,
         city: d.gameInfo?.venue?.address?.city,
-        sourceUrl: `https://www.espn.com/soccer/match/_/gameId/${id}`,
+        sourceUrl: `https://www.espn.com/${leagueMeta(league)!.path.split("/")[0]}/match/_/gameId/${id}`,
+        sport: leagueMeta(league)!.sport,
       },
     },
     { headers: { "Cache-Control": "public, s-maxage=20, stale-while-revalidate=40" } },

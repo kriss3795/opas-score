@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/lib/client/store";
 import { leagueMeta, sportMeta } from "@/lib/catalog";
 import { currentSubscription, enablePush, isStandalone, platform, pushSupported, sendTest } from "@/lib/client/push";
-import { SportIcon } from "@/components/Icons";
 import TeamLogo from "@/components/TeamLogo";
 
 export default function SettingsPage() {
@@ -34,11 +33,17 @@ export default function SettingsPage() {
     <div className="pt-safe space-y-6 px-4 pb-4">
       <h1 className="pt-2 text-2xl font-extrabold tracking-tight">{t("tabSettings")}</h1>
 
+      {!isStandalone() && (
+        <Link href="/install" className="flex items-center gap-3 rounded-2xl bg-brand px-4 py-4 font-extrabold text-white">
+          <span className="text-2xl">📲</span> {t("install")}
+        </Link>
+      )}
+
       <Group title={t("mySports")}>
         <div className="space-y-3 p-4">
           {prefs.sports.map((s) => (
             <div key={s} className="flex items-center gap-2 font-bold" style={{ color: sportMeta(s).color }}>
-              <SportIcon sport={s} className="h-5 w-5" /> {sportMeta(s).name[lang]}
+              <span>{sportMeta(s).emoji}</span> {sportMeta(s).name[lang]}
             </div>
           ))}
           {prefs.leagues.length > 0 && (
@@ -55,6 +60,15 @@ export default function SettingsPage() {
               {prefs.teams.map((tm) => (
                 <span key={tm.id} className="flex items-center gap-1.5 rounded-full bg-card2 py-1 pr-2.5 pl-1 text-sm">
                   <TeamLogo src={tm.logo} name={tm.name} size={18} /> {tm.short ?? tm.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {(prefs.players ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {prefs.players.map((p) => (
+                <span key={`${p.tour}:${p.id}`} className="rounded-full bg-card2 px-2.5 py-1 text-sm">
+                  🎾 {p.name}
                 </span>
               ))}
             </div>
@@ -127,11 +141,6 @@ export default function SettingsPage() {
         />
       </Group>
 
-      {!isStandalone() && (
-        <Link href="/install" className="block rounded-2xl bg-card px-4 py-4 font-semibold">
-          📲 {t("install")}
-        </Link>
-      )}
 
       <Group title={t("dataSources")}>
         <div className="space-y-2 p-4 text-sm text-muted">
