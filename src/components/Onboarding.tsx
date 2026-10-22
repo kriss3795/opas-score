@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/client/store";
-import { LEAGUES, NOT_AVAILABLE, SPORTS, sportMeta, type Group } from "@/lib/catalog";
+import { LEAGUES, SPORTS, sportMeta, type Group } from "@/lib/catalog";
 import type { DriverOption, PlayerOption, SportId, TeamOption } from "@/lib/types";
 import { isStandalone, platform } from "@/lib/client/push";
 import { IconCheck, IconSearch } from "./Icons";
@@ -37,7 +37,7 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
       .catch(() => setAvailable(null));
   }, []);
 
-  const leagueSports = sports.filter((s) => ["team", "event"].includes(sportMeta(s).kind));
+  const leagueSports = sports.filter((s) => ["team", "event", "tennis"].includes(sportMeta(s).kind));
   const teamSports = sports.filter((s) => sportMeta(s).kind === "team");
 
   const steps = useMemo<Step[]>(() => {
@@ -110,7 +110,6 @@ export default function Onboarding({ editing = false }: { editing?: boolean }) {
                 );
               })}
             </div>
-            <p className="mt-6 text-sm leading-relaxed text-muted">{NOT_AVAILABLE[lang]}</p>
           </section>
         )}
 
@@ -286,8 +285,13 @@ function TeamPicker({
   const results = useMemo(() => {
     const nq = norm(q.trim());
     if (nq) return pool.filter((tm) => norm(tm.name).includes(nq) || norm(tm.short ?? "").includes(nq)).slice(0, 80);
-    const chosen = leagues.length ? leagues : ["fra.1", "rugby.270559"];
-    return pool.filter((tm) => tm.leagues.some((l) => chosen.includes(l))).slice(0, 120);
+    // Sin búsqueda: equipos de las competiciones elegidas en cada deporte; si en un deporte no eligió ninguna, todos los de ese deporte.
+    const fromChosen = pool.filter((tm) => {
+      const sp = tm.sport ?? "football";
+      const chosenHere = leagues.filter((l) => LEAGUES.find((x) => x.id === l)?.sport === sp);
+      return chosenHere.length ? tm.leagues.some((l) => chosenHere.includes(l)) : true;
+    });
+    return fromChosen.slice(0, 200);
   }, [pool, q, leagues]);
 
   const isOn = (tm: TeamOption) => selected.some((x) => x.id === tm.id && (x.sport ?? "football") === (tm.sport ?? "football"));

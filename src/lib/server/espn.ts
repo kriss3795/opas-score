@@ -283,9 +283,19 @@ export async function tennisRankings(tour: string): Promise<PlayerOption[] | nul
 }
 
 // Partidos de individuales de los torneos en curso, filtrados por jugadores favoritos.
-export async function tennisMatches(tour: string, playerIds: Set<string>, playerNames: Set<string>, from: Date, to: Date): Promise<SportEvent[] | null> {
+export async function tennisMatches(
+  tour: string,
+  playerIds: Set<string>,
+  playerNames: Set<string>,
+  from: Date,
+  to: Date,
+  followTour = false,
+): Promise<SportEvent[] | null> {
   const d = await getJson<any>(`${SITE}/tennis/${tour}/scoreboard`, 60);
   if (!d) return null;
+  // Circuito seguido: partidos del top 20 del ranking y todas las rondas desde cuartos de final.
+  const top = new Set<string>();
+  if (followTour) (await tennisRankings(tour))?.filter((p) => (p.rank ?? 99) <= 20).forEach((p) => top.add(p.id));
   const out: SportEvent[] = [];
   for (const ev of d.events ?? []) {
     for (const g of ev.groupings ?? []) {
@@ -298,7 +308,9 @@ export async function tennisMatches(tour: string, playerIds: Set<string>, player
         if (cs.length < 2) continue;
         const ids = cs.map((x) => String(x.id ?? x.athlete?.id ?? ""));
         const names = cs.map((x) => x.athlete?.displayName ?? "");
-        if (!ids.some((i) => playerIds.has(i)) && !names.some((n) => playerNames.has(n))) continue;
+        const fav = ids.some((i) => playerIds.has(i)) || names.some((n) => playerNames.has(n));
+        const bigMatch = followTour && (ids.some((i) => top.has(i)) || /quarter|semi|final/i.test(c.round?.displayName ?? ""));
+        if (!fav && !bigMatch) continue;
         const { status, detail } = mapStatus(c.status, "tennis");
         const side = (x: any) => ({
           id: String(x.id ?? x.athlete?.id ?? ""),
@@ -312,7 +324,7 @@ export async function tennisMatches(tour: string, playerIds: Set<string>, player
         out.push({
           id: `tennis-${c.id}`,
           sport: "tennis",
-          competitionId: tour,
+          competitionId: `tennis.${tour}`,
           competitionName: ev.name ?? tour.toUpperCase(),
           start: c.date ?? c.startDate,
           status,

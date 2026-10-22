@@ -36,7 +36,7 @@ export interface LeagueMeta {
   id: string; // identificador interno (para fútbol = slug ESPN)
   sport: SportId;
   path: string; // ruta ESPN: "soccer/fra.1", "rugby/270559", "basketball/nba"
-  kind?: "team" | "event";
+  kind?: "team" | "event" | "tennis";
   fd?: string; // código football-data.org (respaldo de tablas de fútbol)
   name: { fr: string; es: string };
   flag: string;
@@ -171,6 +171,9 @@ export const LEAGUES: LeagueMeta[] = [
   T("nfl", "football/college-football", n("NCAA (football universitaire)", "NCAA (fútbol americano universitario)"), "🇺🇸"),
   T("baseball", "baseball/mlb", n("MLB"), "🇺🇸"),
   T("afl", "australian-football/afl", n("AFL"), "🇦🇺"),
+  // ---------- Tenis: seguir un circuito = partidos del top 20 y desde cuartos de final ----------
+  { id: "tennis.atp", sport: "tennis", path: "tennis/atp", kind: "tennis", cup: true, name: n("ATP (circuit masculin)", "ATP (circuito masculino)"), flag: "🎾", group: "world" },
+  { id: "tennis.wta", sport: "tennis", path: "tennis/wta", kind: "tennis", cup: true, name: n("WTA (circuit féminin)", "WTA (circuito femenino)"), flag: "🎾", group: "world" },
   // ---------- Deportes por eventos ----------
   E("golf", "golf/pga", n("PGA Tour"), "🇺🇸"),
   E("golf", "golf/eur", n("DP World Tour"), "🇪🇺"),
@@ -212,9 +215,3 @@ export const TENNIS_TOURS = ["atp", "wta"];
 
 // Clave única de un equipo: los ids de ESPN se repiten entre deportes.
 export const teamKey = (sport: string, id: string) => `${sport}:${id}`;
-
-// Deportes que SofaScore cubre pero que no tienen una fuente gratuita y fiable hoy.
-export const NOT_AVAILABLE = {
-  fr: "Handball, volley, cyclisme, MotoGP, fléchettes, snooker, e-sport : aucune source gratuite et fiable pour l'instant.",
-  es: "Balonmano, vóleibol, ciclismo, MotoGP, dardos, snooker, e-sports: por ahora no hay una fuente gratuita y fiable.",
-};

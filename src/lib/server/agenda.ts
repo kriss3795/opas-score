@@ -21,7 +21,8 @@ export async function buildAgenda(q: AgendaQuery, from: Date, to: Date) {
   const teamLeagues = q.teamLeagues.filter((l) => leagueMeta(l));
   const playerNames = new Set(q.playerNames);
 
-  const comps = new Set<string>([...leagues, ...teamLeagues]);
+  const tennisTours = leagues.filter((l) => leagueMeta(l)?.kind === "tennis").map((l) => l.split(".")[1]);
+  const comps = new Set<string>([...leagues.filter((l) => leagueMeta(l)?.kind !== "tennis"), ...teamLeagues]);
   // Copas: solo las del país de los equipos favoritos y las europeas/internacionales de su deporte.
   const DOMESTIC_CUPS: Record<string, string[]> = {
     fra: ["fra.coupe_de_france"],
@@ -63,12 +64,12 @@ export async function buildAgenda(q: AgendaQuery, from: Date, to: Date) {
     );
   }
 
-  const tours = new Set(q.players.map((p) => p.split(":")[0]).filter((t) => t === "atp" || t === "wta"));
+  const tours = new Set([...q.players.map((p) => p.split(":")[0]), ...tennisTours].filter((t) => t === "atp" || t === "wta"));
   for (const tour of tours) {
     const ids = new Set(q.players.filter((p) => p.startsWith(`${tour}:`)).map((p) => p.split(":")[1]));
     jobs.push(
       (async () => {
-        const evs = await tennisMatches(tour, ids, playerNames, from, to);
+        const evs = await tennisMatches(tour, ids, playerNames, from, to, tennisTours.includes(tour));
         if (!evs) return void failed.push(tour);
         events.push(...evs);
       })(),

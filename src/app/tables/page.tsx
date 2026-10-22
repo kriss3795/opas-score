@@ -32,7 +32,7 @@ export default function TablesPage() {
   const options = useMemo(() => {
     const ids = new Set([...prefs.leagues, ...prefs.teams.flatMap((x) => x.leagues)]);
     const list = LEAGUES.filter(
-      (l) => ids.has(l.id) && !l.cup && l.kind !== "event" && prefs.sports.includes(l.sport),
+      (l) => ids.has(l.id) && !l.cup && l.kind !== "event" && l.kind !== "tennis" && prefs.sports.includes(l.sport),
     );
     return list.length ? list : LEAGUES.filter((l) => l.id === "fra.1");
   }, [prefs.leagues, prefs.teams, prefs.sports]);
