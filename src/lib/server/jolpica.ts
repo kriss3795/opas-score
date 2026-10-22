@@ -17,6 +17,7 @@ export interface F1Race {
   round: number;
   name: string;
   circuit: string;
+  circuitId?: string;
   locality?: string;
   country?: string;
   lat?: number;
@@ -51,6 +52,7 @@ function parseRace(r: any): F1Race {
     round: Number(r.round),
     name: r.raceName,
     circuit: r.Circuit?.circuitName,
+    circuitId: r.Circuit?.circuitId,
     locality: r.Circuit?.Location?.locality,
     country: r.Circuit?.Location?.country,
     lat: r.Circuit?.Location?.lat ? Number(r.Circuit.Location.lat) : undefined,
@@ -145,4 +147,30 @@ export async function f1Drivers(): Promise<DriverOption[] | null> {
     nationality: d.nationality,
     team: teamOf.get(d.driverId),
   }));
+}
+
+export interface CircuitWin {
+  season: string;
+  name: string;
+  nationality?: string;
+  team?: string;
+}
+
+// Todos los ganadores en un circuito (datos desde 1950).
+export async function f1CircuitWinners(circuitId: string): Promise<CircuitWin[] | null> {
+  if (!/^[a-z_]+$/.test(circuitId)) return null;
+  const d = await getJson<any>(`${BASE}/circuits/${circuitId}/results/1.json?limit=100`, 86400 * 3);
+  const races: any[] = d?.MRData?.RaceTable?.Races ?? [];
+  if (!races.length) return null;
+  return races
+    .map((r) => {
+      const w = r.Results?.[0];
+      return {
+        season: r.season,
+        name: `${w?.Driver?.givenName ?? ""} ${w?.Driver?.familyName ?? ""}`.trim(),
+        nationality: w?.Driver?.nationality,
+        team: w?.Constructor?.name,
+      };
+    })
+    .sort((a, b) => Number(a.season) - Number(b.season));
 }

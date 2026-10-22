@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { f1Calendar, f1DriverStandings, f1ConstructorStandings, f1LastResults } from "@/lib/server/jolpica";
+import { f1Calendar, f1DriverStandings, f1ConstructorStandings, f1LastResults, f1CircuitWinners } from "@/lib/server/jolpica";
+import { f1Facts } from "@/lib/server/facts";
 import { f1Live } from "@/lib/server/espn";
 import { circuitWeather } from "@/lib/server/weather";
 import { sessionStatus } from "@/lib/server/f1events";
@@ -49,6 +50,13 @@ export async function GET() {
     }
   }
 
+  // Datos curiosos del circuito (ganadores históricos reales).
+  let facts: ReturnType<typeof f1Facts> = [];
+  if (current?.circuitId) {
+    const winners = await f1CircuitWinners(current.circuitId);
+    if (winners) facts = f1Facts(winners, current.circuit, current.url ?? `https://api.jolpi.ca/ergast/f1/circuits/${current.circuitId}/results/1.json`);
+  }
+
   // Calculadora de campeonato con datos reales.
   let titleCalc = null;
   if (cal && drivers && drivers.rows.length) {
@@ -85,6 +93,7 @@ export async function GET() {
       constructors,
       last,
       titleCalc,
+      facts,
       failed: { calendar: !cal, standings: !drivers, live: liveFailed },
     },
     { headers: { "Cache-Control": "public, s-maxage=20, stale-while-revalidate=60" } },

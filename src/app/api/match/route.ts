@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eventSummary } from "@/lib/server/espn";
 import { leagueMeta } from "@/lib/catalog";
+import { footballFacts } from "@/lib/server/facts";
+import { eloFixtures, matchElo } from "@/lib/server/clubelo";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -87,9 +89,38 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
 
+  // Forma reciente (últimos resultados) tal como la publica la fuente.
+  const form: Record<string, string[]> = {};
+  const formBlocks: any[] = d.boxscore?.form ?? d.lastFiveGames ?? d.boxscore?.lastFiveGames ?? [];
+  for (const b of formBlocks) {
+    const tid = String(b.team?.id ?? "");
+    const name = tid === home?.id ? home?.name : tid === away?.id ? away?.name : undefined;
+    if (!name) continue;
+    const evs: any[] = (b.events ?? []).slice().sort((x: any, y: any) => String(y.gameDate ?? "").localeCompare(String(x.gameDate ?? "")));
+    form[name] = evs.map((e) => String(e.gameResult ?? "").toUpperCase()).filter((r) => ["W", "D", "L"].includes(r));
+  }
+
+  const meta = leagueMeta(league)!;
+  const sourceUrl = `https://www.espn.com/${meta.path.split("/")[0]}/match/_/gameId/${id}`;
+  const facts =
+    home && away ? footballFacts({ home: home.name, away: away.name, h2h: h2hUnique, form, url: sourceUrl }) : [];
+
+  // Pronóstico ClubElo (solo fútbol, solo si el partido coincide sin ambigüedad).
+  let elo = null;
+  if (meta.sport === "football" && comp?.date && home && away && type.state !== "post") {
+    const rows = await eloFixtures();
+    const names = (c: any) => [c?.team?.displayName, c?.team?.shortDisplayName, c?.team?.name, c?.team?.location, c?.team?.abbreviation];
+    const hc = cs.find((c) => c.homeAway === "home") ?? cs[0];
+    const ac = cs.find((c) => c.homeAway === "away") ?? cs[1];
+    const f = rows ? matchElo(rows, comp.date, names(hc), names(ac)) : null;
+    if (f) elo = { home: f.pHome, draw: f.pDraw, away: f.pAway };
+  }
+
   return NextResponse.json(
     {
       match: {
+        facts,
+        elo,
         league,
         id,
         start: comp?.date,

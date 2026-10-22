@@ -6,6 +6,7 @@ import { fmtDay, fmtTime, isInFrance, locale } from "@/lib/i18n";
 import { F1_TV_FR } from "@/lib/catalog";
 import { sessionLabel } from "@/components/EventCard";
 import { IconTv } from "@/components/Icons";
+import { FactsCard } from "@/components/Facts";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -167,6 +168,8 @@ export default function GPPage() {
           <p className="mt-3 text-xs text-muted">{t("source")} : Open-Meteo</p>
         </section>
       )}
+
+      <FactsCard facts={d.facts} />
 
       {d.titleCalc && d.titleCalc.races > 0 && (
         <section className="rounded-3xl bg-card p-4">

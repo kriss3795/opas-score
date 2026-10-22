@@ -6,6 +6,7 @@ import { useApp } from "@/lib/client/store";
 import { fmtDay, fmtTime, isInFrance, locale } from "@/lib/i18n";
 import { leagueMeta } from "@/lib/catalog";
 import TeamLogo from "@/components/TeamLogo";
+import { EloBar, FactsCard } from "@/components/Facts";
 import { IconBack, IconSofa, IconTv } from "@/components/Icons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -130,6 +131,9 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
           </div>
         )}
       </section>
+
+      {m.elo && m.home && m.away && <EloBar elo={m.elo} home={m.home.name} away={m.away.name} />}
+      <FactsCard facts={m.facts} />
 
       {m.keyEvents?.length > 0 && (
         <section className="rounded-3xl bg-card p-4">

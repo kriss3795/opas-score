@@ -35,7 +35,7 @@ export default function TablesPage() {
       (l) => ids.has(l.id) && !l.cup && l.kind !== "event" && prefs.sports.includes(l.sport),
     );
     return list.length ? list : LEAGUES.filter((l) => l.id === "fra.1");
-  }, [prefs.leagues, prefs.teams]);
+  }, [prefs.leagues, prefs.teams, prefs.sports]);
   const [sel, setSel] = useState(options[0]?.id);
   const [data, setData] = useState<Standings | null | undefined>(undefined);
   const fav = useMemo(() => new Set(prefs.teams.map((x) => `${x.sport ?? "football"}:${x.id}`)), [prefs.teams]);
