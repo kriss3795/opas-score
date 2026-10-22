@@ -42,8 +42,12 @@ export async function buildAgenda(q: AgendaQuery, from: Date, to: Date) {
   const failed: string[] = [];
   const events: SportEvent[] = [];
 
+  // Cada fuente tiene un tiempo máximo: si una tarda demasiado, se responde con el resto
+  // (antes, una fuente lenta podía hacer que toda la agenda fallara).
+  const withTimeout = <T,>(p: Promise<T>, ms = 15000) =>
+    Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), ms))]);
   const jobs: Promise<void>[] = Array.from(comps).map(async (c) => {
-    const evs = await teamScoreboard(c, from, to);
+    const evs = await withTimeout(teamScoreboard(c, from, to));
     if (!evs) {
       failed.push(c);
       return;
@@ -57,7 +61,7 @@ export async function buildAgenda(q: AgendaQuery, from: Date, to: Date) {
   if (q.f1) {
     jobs.push(
       (async () => {
-        const cal = await f1Calendar();
+        const cal = await withTimeout(f1Calendar());
         if (!cal) return void failed.push("f1");
         events.push(...f1SessionEvents(cal, from, to));
       })(),
@@ -69,7 +73,7 @@ export async function buildAgenda(q: AgendaQuery, from: Date, to: Date) {
     const ids = new Set(q.players.filter((p) => p.startsWith(`${tour}:`)).map((p) => p.split(":")[1]));
     jobs.push(
       (async () => {
-        const evs = await tennisMatches(tour, ids, playerNames, from, to, tennisTours.includes(tour));
+        const evs = await withTimeout(tennisMatches(tour, ids, playerNames, from, to, tennisTours.includes(tour)));
         if (!evs) return void failed.push(tour);
         events.push(...evs);
       })(),
@@ -80,7 +84,9 @@ export async function buildAgenda(q: AgendaQuery, from: Date, to: Date) {
   const seen = new Set<string>();
   const unique = events.filter((e) => (seen.has(`${e.sport}-${e.id}`) ? false : (seen.add(`${e.sport}-${e.id}`), true)));
   unique.sort((a, b) => a.start.localeCompare(b.start));
-  return { events: unique, failed };
+  // "failed" solo cuenta lo que el usuario sigue explícitamente (no las copas añadidas automáticamente).
+  const explicit = new Set([...leagues, ...teamLeagues, "f1", ...tours]);
+  return { events: unique, failed: failed.filter((f) => explicit.has(f)) };
 }
 
 const list = (v: unknown) => (typeof v === "string" ? v.split(",").filter(Boolean) : Array.isArray(v) ? v.map(String) : []);

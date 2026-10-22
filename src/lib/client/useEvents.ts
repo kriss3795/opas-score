@@ -32,7 +32,7 @@ export function agendaParams(prefs: Prefs) {
 }
 
 // Agenda personal: pide al servidor solo lo que el usuario sigue y se refresca solo.
-export function useAgenda() {
+export function useAgenda(range?: { from: Date; to: Date }) {
   const { prefs } = useApp();
   const [events, setEvents] = useState<SportEvent[] | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
@@ -42,13 +42,16 @@ export function useAgenda() {
   // y no programa más refrescos, así no quedan ciclos de consultas corriendo en segundo plano.
   const gen = useRef(0);
 
-  const url = `/api/agenda?${agendaParams(prefs)}`;
+  const rangeQ = range ? `&from=${encodeURIComponent(range.from.toISOString())}&to=${encodeURIComponent(range.to.toISOString())}` : "";
+  const url = `/api/agenda?${agendaParams(prefs)}${rangeQ}`;
 
   const load = useCallback(async () => {
     const my = gen.current;
     let live = false;
+    let failedNow = false;
     try {
       const r = await fetch(url);
+      if (!r.ok) throw new Error(String(r.status));
       const d = await r.json();
       if (my !== gen.current) return;
       setEvents(d.events ?? []);
@@ -58,13 +61,17 @@ export function useAgenda() {
     } catch {
       if (my !== gen.current) return;
       setError(true);
+      failedNow = true;
     }
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(load, live ? 30000 : 120000);
+    // Tras un fallo se reintenta pronto (20 s); en vivo cada 30 s; si no, cada 2 min.
+    timer.current = setTimeout(load, failedNow ? 20000 : live ? 30000 : 120000);
   }, [url]);
 
   useEffect(() => {
     gen.current++;
+    setEvents(null);
+    setError(false);
     load();
     const onVis = () => document.visibilityState === "visible" && load();
     document.addEventListener("visibilitychange", onVis);

@@ -2,17 +2,33 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/client/store";
 import { useAgenda } from "@/lib/client/useEvents";
-import { dayKey, fmtDay } from "@/lib/i18n";
+import { dayKey, fmtDay, locale } from "@/lib/i18n";
+import { leagueMeta, sportMeta } from "@/lib/catalog";
 import { isStandalone, platform } from "@/lib/client/push";
 import EventCard from "@/components/EventCard";
 import type { SportEvent } from "@/lib/types";
 
+// Fecha local "AAAA-MM-DD" y medianoche local de una fecha así.
+const ymdLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const midnight = (ymd: string) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
 export default function Home() {
   const { t, lang, prefs } = useApp();
-  const { events, error, failed } = useAgenda();
+  // null = "Mi programa" (lo próximo); una fecha = todo lo de ese día (resultados o programa).
+  const [day, setDay] = useState<string | null>(null);
+  const range = useMemo(() => {
+    if (!day) return undefined;
+    const from = midnight(day);
+    const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1);
+    return { from, to };
+  }, [day]);
+  const { events, error, failed } = useAgenda(range);
   const [showInstall, setShowInstall] = useState(false);
 
   useEffect(() => {
@@ -72,12 +88,17 @@ export default function Home() {
         </Link>
       )}
 
-      {error && <Notice text={t("dataError")} />}
-      {!error && failed.length > 0 && events && events.length > 0 && <Notice text={t("dataError")} small />}
+      <DateStrip day={day} onChange={setDay} />
 
-      {!groups && !error && <Skeleton />}
+      {/* Solo se avisa del fallo si no hay nada que mostrar; si algo cargó, se muestra y se reintenta solo. */}
+      {error && !events && <Notice text={t("dataError")} />}
+      {!error && failed.length > 0 && events && events.length > 0 && <Notice text={lang === "fr" ? "Une source ne répond pas pour le moment : nouvel essai automatique." : "Una fuente no responde por ahora: se reintenta sola."} small />}
 
-      {groups && (
+      {!events && !error && <Skeleton />}
+
+      {day && events && <DayView events={events} favIds={favIds} day={day} />}
+
+      {!day && groups && (
         <div className="space-y-7">
           {groups.followed.length > 0 && (
             <Section title={`⭐ ${t("followed")}`}>
@@ -141,6 +162,106 @@ function Skeleton() {
     <div className="space-y-2.5">
       {[0, 1, 2, 3].map((i) => (
         <div key={i} className="h-24 animate-pulse rounded-2xl bg-card" />
+      ))}
+    </div>
+  );
+}
+
+
+// Tira de días: "Mi programa" y cada fecha (30 días atrás y 30 adelante), más un selector para cualquier día.
+function DateStrip({ day, onChange }: { day: string | null; onChange: (d: string | null) => void }) {
+  const { lang } = useApp();
+  const fr = lang === "fr";
+  const ref = useRef<HTMLDivElement>(null);
+  const today = ymdLocal(new Date());
+  const days = useMemo(() => {
+    const base = new Date();
+    return Array.from({ length: 61 }, (_, i) => ymdLocal(new Date(base.getFullYear(), base.getMonth(), base.getDate() + i - 30)));
+  }, []);
+  // Centra el día elegido (o hoy) en la tira.
+  useEffect(() => {
+    const el = ref.current?.querySelector<HTMLElement>(`[data-day="${day ?? today}"]`);
+    if (el && ref.current) ref.current.scrollLeft = el.offsetLeft - ref.current.clientWidth / 2 + el.clientWidth / 2;
+  }, [day, today]);
+  const max = ymdLocal(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 90));
+  return (
+    <div className="mb-5">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onChange(null)}
+          className={`shrink-0 rounded-2xl px-3 py-2 text-sm font-extrabold ${day === null ? "bg-brand text-white" : "bg-card text-muted"}`}
+        >
+          ⭐ {fr ? "À venir" : "Lo próximo"}
+        </button>
+        <label className="relative shrink-0 rounded-2xl bg-card px-3 py-2 text-sm font-bold text-muted">
+          📅 {fr ? "Date" : "Fecha"}
+          <input
+            type="date"
+            min={ymdLocal(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 110))}
+            max={max}
+            value={day ?? today}
+            onChange={(e) => e.target.value && onChange(e.target.value)}
+            className="absolute inset-0 opacity-0"
+            aria-label={fr ? "Choisir une date" : "Elegir una fecha"}
+          />
+        </label>
+      </div>
+      <div ref={ref} className="no-scrollbar -mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4">
+        {days.map((d) => {
+          const dt = midnight(d);
+          const on = d === day;
+          const isToday = d === today;
+          return (
+            <button
+              key={d}
+              data-day={d}
+              onClick={() => onChange(d)}
+              className={`flex w-12 shrink-0 flex-col items-center rounded-2xl py-1.5 ${on ? "bg-text text-bg" : isToday ? "bg-card text-brand" : "bg-card text-muted"}`}
+            >
+              <span className="text-[10px] font-bold uppercase">{isToday ? (fr ? "auj." : "hoy") : dt.toLocaleDateString(locale(lang), { weekday: "short" }).replace(".", "")}</span>
+              <span className="font-score text-xl leading-none font-extrabold">{dt.getDate()}</span>
+              <span className="text-[10px]">{dt.toLocaleDateString(locale(lang), { month: "short" }).replace(".", "")}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Un día del calendario: todo lo de tus deportes ese día, agrupado por competición.
+function DayView({ events, favIds, day }: { events: SportEvent[]; favIds: Set<string>; day: string }) {
+  const { lang } = useApp();
+  const fr = lang === "fr";
+  const groups = useMemo(() => {
+    const m = new Map<string, { title: string; items: SportEvent[] }>();
+    for (const e of events) {
+      const k = e.competitionId;
+      const meta = sportMeta(e.sport);
+      const title = `${meta.emoji} ${e.sport === "f1" ? meta.name[lang] : leagueMeta(k)?.name[lang] ?? e.competitionName}`;
+      if (!m.has(k)) m.set(k, { title, items: [] });
+      m.get(k)!.items.push(e);
+    }
+    // Primero las competiciones con partidos de tus favoritos.
+    const fav = (e: SportEvent) => favIds.has(`${e.sport}:${e.home?.id}`) || favIds.has(`${e.sport}:${e.away?.id}`);
+    return Array.from(m.values()).sort((a, b) => Number(b.items.some(fav)) - Number(a.items.some(fav)));
+  }, [events, favIds, lang]);
+  const label = fmtDay(midnight(day).toISOString(), lang);
+  if (!events.length)
+    return (
+      <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">
+        {label} : {fr ? "rien pour tes sports et favoris ce jour-là." : "nada de tus deportes y favoritos ese día."}
+      </p>
+    );
+  return (
+    <div className="space-y-7">
+      <h2 className="text-lg font-extrabold capitalize">{label}</h2>
+      {groups.map((g) => (
+        <Section key={g.title} title={g.title}>
+          {g.items.map((e) => (
+            <EventCard key={`${e.sport}-${e.id}`} e={e} favIds={favIds} />
+          ))}
+        </Section>
       ))}
     </div>
   );
