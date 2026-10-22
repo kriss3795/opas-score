@@ -230,10 +230,16 @@ function SoundSettings() {
     setOn(soundsEnabled());
   }, []);
   const tests: [SoundKind, string][] = [
+    ["start", fr ? "🟢 Coup d'envoi" : "🟢 Pitazo inicial"],
     ["goal", fr ? "⚽ But" : "⚽ Gol"],
-    ["start", fr ? "🟢 Coup d'envoi" : "🟢 Inicio"],
+    ["yellow", fr ? "🟨 Carton jaune" : "🟨 Amarilla"],
+    ["red", fr ? "🟥 Carton rouge" : "🟥 Roja"],
+    ["penalty", fr ? "❌ Penalty" : "❌ Penal"],
     ["halftime", fr ? "⏸️ Mi-temps" : "⏸️ Entretiempo"],
-    ["final", fr ? "🏁 Fin" : "🏁 Final"],
+    ["secondhalf", fr ? "▶️ Reprise" : "▶️ 2.º tiempo"],
+    ["final", fr ? "🏁 Fin du match" : "🏁 Pitazo final"],
+    ["lights", fr ? "🚦 Départ F1" : "🚦 Largada F1"],
+    ["checkered", fr ? "🏆 Victoire F1" : "🏆 Ganador F1"],
     ["reminder", fr ? "🔔 Rappel" : "🔔 Aviso"],
   ];
   return (

@@ -116,7 +116,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
         on: !important,
         eventId: e.id,
         start: e.start,
-        title: `${meta.emoji} Opa's Score`,
+        title: e.sport === "f1" ? `🏎️ ${e.competitionName}` : `${meta.emoji} Opa's Score`,
         body,
         url: e.link ?? "/",
         league: teamSport ? e.competitionId : undefined,

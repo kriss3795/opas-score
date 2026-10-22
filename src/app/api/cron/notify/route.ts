@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { supa, sendPush } from "@/lib/server/push";
 import { isMorning, localDate, morningSummary } from "@/lib/server/morning";
-import { eventState, liveAlerts } from "@/lib/server/live";
+import { eventState, liveAlerts, f1Alerts } from "@/lib/server/live";
+import { getJson } from "@/lib/server/http";
 
 export const maxDuration = 60;
 
@@ -79,13 +81,45 @@ async function run(req: NextRequest) {
       if (prev?.s === "post") continue;
       const { data: subRow } = await db.from("push_subs").select("sub, lang").eq("endpoint", f.endpoint).maybeSingle();
       if (!subRow) continue;
-      const alerts = liveAlerts(prev, st.state, st.e, subRow.lang === "es" ? "es" : "fr", f.url ?? "/");
+      const mine = { ...st.state };
+      const alerts = liveAlerts(prev, mine, st.e, st.keyEvents, subRow.lang === "es" ? "es" : "fr", f.url ?? "/");
       for (const al of alerts) {
         const r = await sendPush(subRow.sub, al);
         if (r === "ok") live++;
       }
-      if (JSON.stringify(prev) !== JSON.stringify(st.state)) await db.from("reminders").update({ last_state: st.state }).eq("id", f.id);
+      if (JSON.stringify(prev) !== JSON.stringify(mine)) await db.from("reminders").update({ last_state: mine }).eq("id", f.id);
     }
+  }
+
+  // F1: semáforos y ganador de las sesiones seguidas.
+  const { data: f1Follows } = await db
+    .from("reminders")
+    .select("id, endpoint, event_id, title, url, start_at, last_state")
+    .like("event_id", "f1-%")
+    .lte("start_at", new Date(now + 60000).toISOString())
+    .gte("start_at", new Date(now - 4 * 3600000).toISOString())
+    .limit(100);
+  const winners = new Map<string, string | null>();
+  for (const f of f1Follows ?? []) {
+    if (f.last_state?.done) continue;
+    const [, season, round, session] = String(f.event_id).split("-");
+    let winner: string | null = null;
+    if ((session === "race" || session === "sprint") && now - new Date(f.start_at).getTime() > 60 * 60000) {
+      const k = `${season}-${round}-${session}`;
+      if (!winners.has(k)) {
+        const d = await getJson<any>(`https://api.jolpi.ca/ergast/f1/${season}/${round}/${session === "race" ? "results" : "sprint"}.json?limit=1`, 300);
+        const race = d?.MRData?.RaceTable?.Races?.[0];
+        const w = (race?.Results ?? race?.SprintResults)?.[0]?.Driver;
+        winners.set(k, w ? `${w.givenName} ${w.familyName}` : null);
+      }
+      winner = winners.get(k) ?? null;
+    }
+    const { data: subRow } = await db.from("push_subs").select("sub, lang").eq("endpoint", f.endpoint).maybeSingle();
+    if (!subRow) continue;
+    const raceName = String(f.title ?? "").replace(/^\S+\s*/, "") || "Grand Prix";
+    const res = f1Alerts(f.last_state, session, f.start_at, raceName, winner, subRow.lang === "es" ? "es" : "fr", f.url ?? "/gp");
+    for (const al of res.alerts) if ((await sendPush(subRow.sub, al)) === "ok") live++;
+    if (JSON.stringify(res.state) !== JSON.stringify(f.last_state ?? {})) await db.from("reminders").update({ last_state: res.state }).eq("id", f.id);
   }
 
   // Limpieza de avisos viejos.
