@@ -211,7 +211,15 @@ export async function matchDetail(league: string, id: string) {
   }));
 
   // --- Líderes ---
-  const leaders: { teamId: string; category: string; label: string; name: string; value: string }[] = [];
+  // En fútbol la fuente da "Matches: 7, Goals: 4": se separa el número principal y los partidos.
+  const parseLeader = (raw: string) => {
+    const pairs = Array.from(raw.matchAll(/([A-Za-z ]+):\s*([\d.,]+)/g)).map((x) => [x[1].trim().toLowerCase(), x[2]] as const);
+    if (!pairs.length) return { value: raw, matches: undefined as string | undefined };
+    const matches = pairs.find(([k]) => k.startsWith("match") || k.startsWith("game"))?.[1];
+    const main = pairs.filter(([k]) => !k.startsWith("match") && !k.startsWith("game")).pop()?.[1] ?? raw;
+    return { value: main, matches };
+  };
+  const leaders: { teamId: string; category: string; label: string; name: string; value: string; matches?: string }[] = [];
   for (const blk of d.leaders ?? []) {
     const tid = String(blk.team?.id ?? "");
     for (const cat of blk.leaders ?? []) {
@@ -222,7 +230,7 @@ export async function matchDetail(league: string, id: string) {
         category: String(cat.name ?? ""),
         label: String(cat.displayName ?? cat.name ?? ""),
         name: top.athlete.displayName,
-        value: String(top.displayValue ?? top.value ?? ""),
+        ...parseLeader(String(top.displayValue ?? top.value ?? "")),
       });
     }
   }

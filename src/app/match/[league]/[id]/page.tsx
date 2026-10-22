@@ -580,7 +580,10 @@ function Leaders({ m, teamOf }: { m: any; teamOf: (id: string) => any }) {
             <TeamLogo src={teamOf(l.teamId)?.logo} name={teamOf(l.teamId)?.name ?? ""} size={20} />
             <span className="min-w-0 flex-1 leading-tight">
               <span className="font-semibold">{l.name}</span>
-              <span className="block text-xs text-muted">{leaderLabel(l.category, l.label, lang)}</span>
+              <span className="block text-xs text-muted">
+                {leaderLabel(l.category, l.label, lang)}
+                {l.matches ? ` · ${l.matches} ${lang === "fr" ? "matchs" : "partidos"}` : ""}
+              </span>
             </span>
             <span className="font-score text-lg font-bold">{l.value}</span>
           </li>
