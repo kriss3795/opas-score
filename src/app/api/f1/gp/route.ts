@@ -32,12 +32,11 @@ export async function GET(req: Request) {
     const first = new Date(current.sessions[0].start);
     const lastS = new Date(current.start);
     if (first.getTime() - now < 15 * 86400000) {
-      weather = await circuitWeather(
-        current.lat,
-        current.lon,
-        first.toISOString().slice(0, 10),
-        lastS.toISOString().slice(0, 10),
-      );
+      // Fechas locales del circuito (la hora UTC de Las Vegas o Singapur cae en otro día).
+      // Se aproxima el huso por la longitud: suficiente para elegir el día correcto.
+      const off = Math.round(current.lon / 15) * 3600000;
+      const localDay = (d: Date) => new Date(d.getTime() + off).toISOString().slice(0, 10);
+      weather = await circuitWeather(current.lat, current.lon, localDay(first), localDay(lastS));
     }
   }
 

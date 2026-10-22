@@ -121,7 +121,7 @@ const dict = {
   installedOk: { fr: "L'app est installée. Parfait !", es: "La app está instalada. ¡Perfecto!" },
   iosStep1: { fr: "Ouvre cette page dans Safari.", es: "Abre esta página en Safari." },
   iosStep2: { fr: "Touche le bouton Partager (carré avec une flèche vers le haut).", es: "Toca el botón Compartir (cuadrado con una flecha hacia arriba)." },
-  iosStep3: { fr: "Choisis « Sur l'écran d'accueil ».", es: "Elige «Agregar a inicio»." },
+  iosStep3: { fr: "Choisis « Sur l'écran d'accueil ».", es: "Elige «Agregar a pantalla de inicio»." },
   iosStep4: { fr: "Touche « Ajouter », puis ouvre l'app depuis l'icône.", es: "Toca «Agregar» y luego abre la app desde el ícono." },
   iosVersion: { fr: "Notifications : iOS 16.4 ou plus récent requis.", es: "Notificaciones: se necesita iOS 16.4 o más reciente." },
   andStep1: { fr: "Ouvre cette page dans Chrome.", es: "Abre esta página en Chrome." },
