@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
               score: (me?.linescores ?? []).map((l: any, i: number) => `${l.value}-${op?.linescores?.[i]?.value ?? ""}`).join(" "),
             };
           })
+          .filter((x: any) => !/^tbd$/i.test(x.opp))
           .sort((x: any, y: any) => String(x.date).localeCompare(String(y.date)));
       return NextResponse.json(
         {
@@ -58,6 +59,8 @@ export async function GET(req: NextRequest) {
             round: c.round?.displayName,
             start: c.date,
             state: c.status?.type?.state ?? "pre",
+            // Abandono o walkover: el marcador queda incompleto y se indica.
+            ending: /RETIRED/.test(c.status?.type?.name ?? "") ? "RET" : /WALKOVER|FORFEIT/.test(c.status?.type?.name ?? "") ? "WO" : undefined,
             detail: c.status?.period ? `Set ${c.status.period}` : undefined,
             court: c.venue?.court ?? c.venue?.fullName,
             a,

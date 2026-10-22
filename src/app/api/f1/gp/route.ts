@@ -21,6 +21,16 @@ export async function GET(req: Request) {
     f1LastResults(),
   ]);
 
+  // Equipo actual de cada piloto: el de la última carrera (un piloto que cambió de equipo
+  // a mitad de temporada aparece en la clasificación con más de una escudería).
+  if (drivers && last?.rows?.length) {
+    const teamNow = new Map<string, string>(last.rows.map((r: { driverId: string; team: string }) => [r.driverId, r.team]));
+    drivers.rows.forEach((r) => {
+      const t = teamNow.get(r.driverId);
+      if (t) r.team = t;
+    });
+  }
+
   const now = Date.now();
   // GP actual o próximo: el primero cuya carrera no terminó hace más de 3 h.
   const current = cal?.find((r) => new Date(r.start).getTime() + 3 * 3600000 > now) ?? null;

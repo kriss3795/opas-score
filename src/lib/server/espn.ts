@@ -42,7 +42,11 @@ export function mapStatus(st: any, sport = "football"): { status: EventStatus; d
     return { status: "in", detail: liveDetail(st, sport) };
   }
   // Final con prórroga o penales: se indica (en códigos neutros, la app los traduce).
-  if (state === "post") return { status: "post", detail: /PEN|SHOOTOUT/.test(name) ? "PEN" : /AET|OT|EXTRA/.test(name) ? "AET" : undefined };
+  if (state === "post")
+    return {
+      status: "post",
+      detail: /RETIRED/.test(name) ? "RET" : /WALKOVER|FORFEIT/.test(name) ? "WO" : /PEN|SHOOTOUT/.test(name) ? "PEN" : /AET|OT|EXTRA/.test(name) ? "AET" : undefined,
+    };
   return { status: "pre" };
 }
 
@@ -399,6 +403,8 @@ export async function tennisMatches(
         if (isNaN(t.getTime()) || t < from || t > to) continue;
         const cs: any[] = c.competitors ?? [];
         if (cs.length < 2) continue;
+        // Rondas futuras con rivales aún por definir ("TBD"): no se muestran.
+        if (cs.some((x) => Number(x.id ?? x.athlete?.id) < 0 || /^tbd$/i.test(x.athlete?.displayName ?? ""))) continue;
         const ids = cs.map((x) => String(x.id ?? x.athlete?.id ?? ""));
         const names = cs.map((x) => x.athlete?.displayName ?? "");
         const fav = ids.some((i) => playerIds.has(i)) || names.some((n) => playerNames.has(n));

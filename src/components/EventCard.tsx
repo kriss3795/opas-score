@@ -51,6 +51,8 @@ export function StatusBadge({ e }: { e: SportEvent }) {
       <span className="text-right text-sm leading-tight font-semibold text-muted">
         {t("final")}
         {e.statusDetail === "PEN" && <span className="block text-[11px]">{lang === "fr" ? "t.a.b." : "penales"}</span>}
+        {e.statusDetail === "RET" && <span className="block text-[11px]">{lang === "fr" ? "abandon" : "retiro"}</span>}
+        {e.statusDetail === "WO" && <span className="block text-[11px]">{lang === "fr" ? "forfait" : "W.O."}</span>}
         {e.statusDetail === "AET" && <span className="block text-[11px]">{lang === "fr" ? (e.sport === "football" ? "a.p." : "prol.") : "prórroga"}</span>}
       </span>
     );

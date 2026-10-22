@@ -113,7 +113,7 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
           {live
             ? m.detail
             : m.state === "post"
-              ? t("final")
+              ? `${t("final")}${m.ending === "RET" ? (fr ? " (abandon)" : " (retiro)") : m.ending === "WO" ? (fr ? " (forfait)" : " (W.O.)") : ""}`
               : `${fmtDay(m.start, lang)} · ${fmtTime(m.start, lang)} (${fr ? "horaire indicatif" : "hora estimada"})`}
         </div>
       </section>
