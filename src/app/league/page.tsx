@@ -101,13 +101,25 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
   const [comps, setComps] = useState<string[]>(defaults.length ? defaults : ["fra.1", "uefa.champions"]);
   const [f1, setF1] = useState(prefs.sports.includes("f1"));
   const [duration, setDuration] = useState<string>("30");
+  const [untilDate, setUntilDate] = useState<string>("");
+  const minDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const maxDate = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     setBusy(true);
     setErr("");
-    const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", name, player, comps, f1, duration }) });
+    const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        action: "create",
+        name,
+        player,
+        comps,
+        f1,
+        // Fecha elegida: fin del día en la hora del teléfono.
+        duration: duration === "date" ? new Date(`${untilDate}T23:59:00`).toISOString() : duration,
+      }),
+    });
     setBusy(false);
     if (!r.ok) return setErr(fr ? "Impossible de créer la ligue. Vérifie les champs." : "No se pudo crear la liga. Revisa los campos.");
     const d = await r.json();
@@ -135,7 +147,7 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
               ["7", fr ? "1 semaine" : "1 semana"],
               ["30", fr ? "1 mois (4 journées)" : "1 mes (4 jornadas)"],
               ["90", fr ? "3 mois (13 journées)" : "3 meses (13 jornadas)"],
-              ["season", fr ? "Jusqu'au 30 juin" : "Hasta el 30 de junio"],
+              ["date", fr ? "Jusqu'au…" : "Hasta el…"],
             ] as const
           ).map(([v, l]) => (
             <button
@@ -148,6 +160,16 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
             </button>
           ))}
         </div>
+        {duration === "date" && (
+          <input
+            type="date"
+            value={untilDate}
+            min={minDate}
+            max={maxDate}
+            onChange={(e) => setUntilDate(e.target.value)}
+            className={`${inputCls} mt-2`}
+          />
+        )}
         <p className="mt-1.5 text-xs text-muted">
           {fr
             ? "Chaque semaine est une journée avec son vainqueur. À la fin, le champion est sacré."
@@ -175,7 +197,7 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
         </div>
       </Field>
       {err && <p className="text-sm text-live">{err}</p>}
-      <button disabled={busy || !player.trim() || !name.trim()} onClick={submit} className="w-full rounded-2xl bg-brand py-4 text-lg font-extrabold text-white disabled:opacity-40">
+      <button disabled={busy || !player.trim() || !name.trim() || (duration === "date" && !untilDate)} onClick={submit} className="w-full rounded-2xl bg-brand py-4 text-lg font-extrabold text-white disabled:opacity-40">
         {fr ? "Créer la ligue" : "Crear la liga"}
       </button>
     </section>

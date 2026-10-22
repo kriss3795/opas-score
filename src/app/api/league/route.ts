@@ -8,15 +8,15 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const cleanName = (s: unknown) => String(s ?? "").trim().replace(/\s+/g, " ").slice(0, 24);
-// Duración de la temporada: 7, 30 o 90 días, o hasta el 30 de junio (fin de las ligas europeas).
+// Duración de la temporada: 7, 14, 30 o 90 días, o una fecha elegida (entre mañana y un año).
 function seasonEnd(d: unknown): string {
-  const now = new Date();
-  if (d === "season") {
-    const y = now.getMonth() >= 6 ? now.getFullYear() + 1 : now.getFullYear();
-    return new Date(Date.UTC(y, 5, 30, 22, 0)).toISOString();
+  const now = Date.now();
+  if (typeof d === "string" && d.includes("T")) {
+    const t = new Date(d).getTime();
+    if (Number.isFinite(t) && t > now + 3600000 && t < now + 366 * 86400000) return new Date(t).toISOString();
   }
   const days = [7, 14, 30, 90].includes(Number(d)) ? Number(d) : 30;
-  return new Date(now.getTime() + days * 86400000).toISOString();
+  return new Date(now + days * 86400000).toISOString();
 }
 
 const cleanCode = (s: unknown) => String(s ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
