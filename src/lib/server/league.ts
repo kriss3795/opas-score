@@ -31,9 +31,12 @@ export interface Predictable {
 export const START_COINS = 1000;
 const toOdds = (p: number) => Math.max(1.05, Math.round((1 / p) * 100) / 100);
 
-export async function upcomingFor(comps: string[], f1: boolean): Promise<Predictable[]> {
+export async function upcomingFor(comps: string[], f1: boolean, until?: string | null): Promise<Predictable[]> {
   const now = new Date();
-  const to = new Date(now.getTime() + 7 * 86400000);
+  // Solo partidos de los próximos 7 días y dentro de la temporada de la liga.
+  const end = until ? new Date(until) : null;
+  if (end && end <= now) return [];
+  const to = new Date(Math.min(now.getTime() + 7 * 86400000, end ? end.getTime() : Infinity));
   const out: Predictable[] = [];
   const elo = await eloFixtures();
   await Promise.all(
@@ -67,7 +70,7 @@ export async function upcomingFor(comps: string[], f1: boolean): Promise<Predict
   if (f1) {
     const cal = await f1Calendar();
     const next = cal?.find((r) => new Date(r.start) > now);
-    if (next) {
+    if (next && (!end || new Date(next.start) <= end)) {
       out.push({ key: `f1|${next.season}|${next.round}`, kind: "podium", label: next.name, start: next.start, competition: "Formule 1" });
     }
   }
@@ -76,7 +79,7 @@ export async function upcomingFor(comps: string[], f1: boolean): Promise<Predict
 }
 
 // Resultado real de un evento pronosticado (null si aún no termina).
-async function resultOf(key: string): Promise<any | null> {
+async function resultOfSource(key: string): Promise<any | null> {
   const [kind, a, b] = key.split("|");
   if (kind === "fb") {
     const d = await eventSummary(a, b, 600);
@@ -95,6 +98,30 @@ async function resultOf(key: string): Promise<any | null> {
     return res.length >= 3 ? { p: res.slice(0, 3).map((r) => r.Driver?.driverId) } : null;
   }
   return null;
+}
+
+// Los resultados finales se guardan en la base: una temporada larga no vuelve a consultar la fuente.
+async function resultsFor(keys: string[]): Promise<Map<string, any>> {
+  const out = new Map<string, any>();
+  if (!keys.length) return out;
+  const db = supa();
+  if (db) {
+    const { data } = await db.from("fl_results").select("event_key, value").in("event_key", keys);
+    (data ?? []).forEach((r) => out.set(r.event_key, r.value));
+  }
+  const missing = keys.filter((k) => !out.has(k)).slice(0, 80);
+  const fresh: { event_key: string; value: any }[] = [];
+  await Promise.all(
+    missing.map(async (k) => {
+      const r = await resultOfSource(k);
+      if (r) {
+        out.set(k, r);
+        fresh.push({ event_key: k, value: r });
+      }
+    }),
+  );
+  if (db && fresh.length) await db.from("fl_results").upsert(fresh);
+  return out;
 }
 
 export function score(key: string, pred: any, res: any): number {
@@ -116,7 +143,7 @@ export function score(key: string, pred: any, res: any): number {
 export async function leagueState(code: string, token?: string) {
   const db = supa();
   if (!db) return null;
-  const { data: lg } = await db.from("fl_leagues").select("code, name, comps, f1").eq("code", code).maybeSingle();
+  const { data: lg } = await db.from("fl_leagues").select("code, name, comps, f1, starts_at, ends_at").eq("code", code).maybeSingle();
   if (!lg) return null;
   const { data: members } = await db.from("fl_members").select("id, name, token").eq("league_code", code);
   const ids = (members ?? []).map((m) => m.id);
@@ -129,8 +156,7 @@ export async function leagueState(code: string, token?: string) {
     : { data: [] as any[] };
 
   const keys = Array.from(new Set([...(preds ?? []), ...(bets ?? [])].filter((p) => new Date(p.start_at) < new Date()).map((p) => p.event_key)));
-  const results = new Map<string, any>();
-  await Promise.all(keys.slice(0, 60).map(async (k) => results.set(k, await resultOf(k))));
+  const results = await resultsFor(keys);
 
   const me = (members ?? []).find((m) => token && m.token === token) ?? null;
   const table = (members ?? []).map((m) => {
@@ -161,8 +187,46 @@ export async function leagueState(code: string, token?: string) {
         .sort((a, b) => String(b.start).localeCompare(String(a.start)))
     : [];
 
+  // Temporada: inicio, fin y jornadas semanales con su ganador.
+  const now = Date.now();
+  const startsAt = new Date(lg.starts_at ?? Date.now()).getTime();
+  const endsAt = lg.ends_at ? new Date(lg.ends_at).getTime() : null;
+  const finished = endsAt !== null && now > endsAt;
+  const WEEK = 7 * 86400000;
+  const totalRounds = endsAt ? Math.max(1, Math.ceil((endsAt - startsAt) / WEEK)) : null;
+  const roundOf = (iso: string) => Math.floor((new Date(iso).getTime() - startsAt) / WEEK) + 1;
+  const currentRound = Math.min(Math.max(1, Math.floor((now - startsAt) / WEEK) + 1), totalRounds ?? Infinity);
+  const rounds: { round: number; from: string; to: string; done: boolean; standings: { name: string; points: number }[]; winners: string[] }[] = [];
+  const nRounds = totalRounds ?? currentRound;
+  for (let r = 1; r <= nRounds; r++) {
+    const from = startsAt + (r - 1) * WEEK;
+    const to = Math.min(from + WEEK, endsAt ?? Infinity);
+    const standings = (members ?? []).map((m) => {
+      let pts = 0;
+      for (const p of (preds ?? []).filter((x) => x.member_id === m.id && roundOf(x.start_at) === r)) {
+        const res = results.get(p.event_key);
+        if (res) pts += score(p.event_key, p.value, res);
+      }
+      return { name: m.name, points: pts };
+    });
+    standings.sort((a, b) => b.points - a.points);
+    const top = standings[0]?.points ?? 0;
+    const done = now > to;
+    rounds.push({
+      round: r,
+      from: new Date(from).toISOString(),
+      to: new Date(to).toISOString(),
+      done,
+      standings,
+      winners: done && top > 0 ? standings.filter((x) => x.points === top).map((x) => x.name) : [],
+    });
+  }
+  const weekWins = new Map<string, number>();
+  rounds.forEach((r) => r.winners.forEach((w) => weekWins.set(w, (weekWins.get(w) ?? 0) + 1)));
+  table.forEach((row) => Object.assign(row, { weekWins: weekWins.get(row.name) ?? 0 }));
+
   // Lo que se ve de los demás: solo pronósticos de eventos ya empezados (para no copiar).
-  const upcoming = await upcomingFor(lg.comps ?? [], lg.f1);
+  const upcoming = finished ? [] : await upcomingFor(lg.comps ?? [], lg.f1, lg.ends_at);
   const drivers = lg.f1 ? ((await f1Drivers()) ?? []).map((d) => ({ id: d.id, name: d.name, code: d.code })) : [];
 
   const myBets = me
@@ -180,6 +244,16 @@ export async function leagueState(code: string, token?: string) {
 
   return {
     league: { code: lg.code, name: lg.name, comps: lg.comps, f1: lg.f1 },
+    season: {
+      startsAt: new Date(startsAt).toISOString(),
+      endsAt: endsAt ? new Date(endsAt).toISOString() : null,
+      finished,
+      totalRounds,
+      currentRound,
+      rounds,
+      champion: finished ? table.filter((r) => r.points === table[0]?.points && r.points > 0).map((r) => r.name) : [],
+      coinChampion: finished ? [...table].sort((a, b) => b.coins - a.coins)[0]?.name ?? null : null,
+    },
     me: me ? { name: me.name, coins: myWallet?.balance ?? START_COINS, available: myWallet?.available ?? START_COINS } : null,
     myBets,
     table,
@@ -212,9 +286,6 @@ export async function memberWallet(memberId: string) {
   const db = supa();
   if (!db) return null;
   const { data: bets } = await db.from("fl_bets").select("member_id, event_key, pick, stake, odds, start_at").eq("member_id", memberId);
-  const results = new Map<string, any>();
-  await Promise.all(
-    (bets ?? []).filter((b) => new Date(b.start_at) < new Date()).map(async (b) => results.set(b.event_key, await resultOf(b.event_key))),
-  );
+  const results = await resultsFor((bets ?? []).filter((b) => new Date(b.start_at) < new Date()).map((b) => b.event_key));
   return wallet(memberId, bets ?? [], results);
 }

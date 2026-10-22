@@ -37,27 +37,36 @@ function LeagueInner() {
     <div className="pt-safe space-y-4 px-4 pb-4">
       <h1 className="pt-2 text-2xl font-extrabold tracking-tight">🏆 {fr ? "Ligue entre amis" : "Liga de amigos"}</h1>
 
-      {mine.length > 0 && (
-        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-          {mine.map((l) => (
-            <button
-              key={l.code}
-              onClick={() => {
-                setActive(l.code);
-                setMode("view");
-              }}
-              className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${mode === "view" && active === l.code ? "bg-text text-bg" : "bg-card text-muted"}`}
-            >
-              {l.name}
+      {mine.length > 0 && mode === "view" && (
+        <>
+          {mine.length > 1 && (
+            <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+              {mine.map((l) => (
+                <button
+                  key={l.code}
+                  onClick={() => setActive(l.code)}
+                  className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${active === l.code ? "bg-text text-bg" : "bg-card text-muted"}`}
+                >
+                  {l.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setMode("create")} className="rounded-2xl bg-card py-3 text-sm font-bold">
+              ➕ {fr ? "Nouvelle ligue" : "Nueva liga"}
             </button>
-          ))}
-          <button onClick={() => setMode("create")} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${mode === "create" ? "bg-text text-bg" : "bg-card text-muted"}`}>
-            + {fr ? "Créer" : "Crear"}
-          </button>
-          <button onClick={() => setMode("join")} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${mode === "join" ? "bg-text text-bg" : "bg-card text-muted"}`}>
-            {fr ? "Rejoindre" : "Unirme"}
-          </button>
-        </div>
+            <button onClick={() => setMode("join")} className="rounded-2xl bg-card py-3 text-sm font-bold">
+              🔑 {fr ? "Rejoindre avec un code" : "Unirme con un código"}
+            </button>
+          </div>
+        </>
+      )}
+
+      {mine.length > 0 && mode !== "view" && (
+        <button onClick={() => setMode("view")} className="flex items-center gap-2 rounded-full bg-card px-4 py-2 text-sm font-bold">
+          ← {fr ? "Retour à mes ligues" : "Volver a mis ligas"}
+        </button>
       )}
 
       {mode === "create" && <CreateLeague onDone={addLeague} />}
@@ -91,13 +100,14 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
   const [player, setPlayer] = useState("");
   const [comps, setComps] = useState<string[]>(defaults.length ? defaults : ["fra.1", "uefa.champions"]);
   const [f1, setF1] = useState(prefs.sports.includes("f1"));
+  const [duration, setDuration] = useState<string>("30");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     setBusy(true);
     setErr("");
-    const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", name, player, comps, f1 }) });
+    const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", name, player, comps, f1, duration }) });
     setBusy(false);
     if (!r.ok) return setErr(fr ? "Impossible de créer la ligue. Vérifie les champs." : "No se pudo crear la liga. Revisa los campos.");
     const d = await r.json();
@@ -117,6 +127,32 @@ function CreateLeague({ onDone }: { onDone: (l: { code: string; token: string; n
       </Field>
       <Field label={fr ? "Ton prénom" : "Tu nombre"}>
         <input className={inputCls} value={player} onChange={(e) => setPlayer(e.target.value)} maxLength={24} placeholder="Richy" />
+      </Field>
+      <Field label={fr ? "Durée de la saison" : "Duración de la temporada"}>
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              ["7", fr ? "1 semaine" : "1 semana"],
+              ["30", fr ? "1 mois (4 journées)" : "1 mes (4 jornadas)"],
+              ["90", fr ? "3 mois (13 journées)" : "3 meses (13 jornadas)"],
+              ["season", fr ? "Jusqu'au 30 juin" : "Hasta el 30 de junio"],
+            ] as const
+          ).map(([v, l]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setDuration(v)}
+              className={`rounded-xl px-3 py-2.5 text-sm font-semibold ${duration === v ? "bg-brand text-white" : "bg-card2 text-muted"}`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-xs text-muted">
+          {fr
+            ? "Chaque semaine est une journée avec son vainqueur. À la fin, le champion est sacré."
+            : "Cada semana es una jornada con su ganador. Al final se corona al campeón."}
+        </p>
       </Field>
       <Field label={fr ? "Compétitions à pronostiquer" : "Competiciones para pronosticar"}>
         <div className="flex flex-wrap gap-2">
@@ -182,7 +218,7 @@ function LeagueView({ code, token }: { code: string; token: string }) {
   const { lang } = useApp();
   const fr = lang === "fr";
   const [st, setSt] = useState<any>(undefined);
-  const [tab, setTab] = useState<"predict" | "table" | "mine">("predict");
+  const [tab, setTab] = useState<"predict" | "table" | "rounds" | "mine">("predict");
 
   const load = useCallback(() => {
     fetch(`/api/league?code=${code}&token=${token}`)
@@ -221,7 +257,9 @@ function LeagueView({ code, token }: { code: string; token: string }) {
         </a>
       </section>
 
-      {st.me && (
+      <SeasonHeader st={st} code={code} token={token} />
+
+      {st.me && !st.season?.finished && (
         <section className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3">
           <span className="text-3xl">🪙</span>
           <span className="flex-1">
@@ -241,6 +279,7 @@ function LeagueView({ code, token }: { code: string; token: string }) {
           [
             ["predict", fr ? "Pronostics" : "Pronosticar"],
             ["table", fr ? "Classement" : "Tabla"],
+            ["rounds", fr ? "Journées" : "Jornadas"],
             ["mine", fr ? "Mes résultats" : "Mis resultados"],
           ] as const
         ).map(([k, l]) => (
@@ -250,10 +289,20 @@ function LeagueView({ code, token }: { code: string; token: string }) {
         ))}
       </div>
 
+      {tab === "rounds" && <Rounds st={st} />}
+
       {tab === "predict" && (
         <div className="space-y-2.5">
           {st.upcoming.length === 0 && (
-            <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">{fr ? "Aucun match à pronostiquer cette semaine." : "No hay partidos para pronosticar esta semana."}</p>
+            <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">
+              {st.season?.finished
+                ? fr
+                  ? "La saison est terminée. Lance une nouvelle saison !"
+                  : "La temporada terminó. ¡Empieza una nueva!"
+                : fr
+                  ? "Aucun match à pronostiquer cette semaine."
+                  : "No hay partidos para pronosticar esta semana."}
+            </p>
           )}
           {st.upcoming.map((e: any) =>
             e.kind === "score" ? (
@@ -454,7 +503,10 @@ function LeagueTable({ rows }: { rows: any[] }) {
         {sorted.map((r, i) => (
           <div key={r.name} className={`flex items-center gap-3 border-b border-line px-4 py-3 last:border-0 ${r.isMe ? "bg-brand/10" : ""}`}>
             <span className="font-score w-7 text-center text-xl font-extrabold">{i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span>
-            <span className="flex-1 leading-tight font-semibold">{r.name}</span>
+            <span className="flex-1 leading-tight font-semibold">
+              {r.name}
+              {r.weekWins > 0 && <span className="ml-1.5 text-xs text-gold">🏅×{r.weekWins}</span>}
+            </span>
             {by === "points" ? (
               <>
                 <span className="text-xs text-muted">{r.accuracy === null ? "–" : `${Math.round(r.accuracy * 100)}% ${fr ? "réussite" : "acierto"}`}</span>
@@ -518,6 +570,127 @@ function PodiumPredict({ e, code, token, initial, drivers, onSaved }: { e: any; 
       >
         {state === "saved" ? (lang === "fr" ? "✓ Enregistré" : "✓ Guardado") : state === "error" ? (lang === "fr" ? "Trop tard ou erreur" : "Muy tarde o error") : lang === "fr" ? "Valider mon podium" : "Guardar mi podio"}
       </button>
+    </div>
+  );
+}
+
+function SeasonHeader({ st, code, token }: { st: any; code: string; token: string }) {
+  const { lang, update } = useApp();
+  const fr = lang === "fr";
+  const se = st.season;
+  const [busy, setBusy] = useState(false);
+  if (!se) return null;
+  const fmt = (iso: string) => new Date(iso).toLocaleDateString(fr ? "fr-FR" : "es-CL", { day: "numeric", month: "short" });
+
+  if (se.finished) {
+    const podium = st.table.slice(0, 3);
+    return (
+      <section className="rounded-3xl p-5 text-center" style={{ background: "linear-gradient(160deg, color-mix(in srgb, var(--gold) 35%, var(--card)), var(--card) 75%)" }}>
+        <div className="text-5xl">🏆</div>
+        <h3 className="mt-2 text-xs font-bold tracking-widest text-text/70 uppercase">{fr ? "Saison terminée" : "Temporada terminada"}</h3>
+        <p className="mt-1 text-2xl leading-tight font-extrabold">
+          {se.champion.length ? `${se.champion.join(" & ")} ${fr ? (se.champion.length > 1 ? "champions !" : "champion !") : se.champion.length > 1 ? "¡campeones!" : "¡campeón!"}` : fr ? "Pas de champion (aucun point)" : "Sin campeón (nadie sumó puntos)"}
+        </p>
+        <div className="mt-4 flex items-end justify-center gap-2">
+          {[1, 0, 2].map((i) =>
+            podium[i] ? (
+              <div key={i} className="w-24">
+                <div className="text-2xl">{["🥇", "🥈", "🥉"][i]}</div>
+                <div className="truncate text-sm font-bold">{podium[i].name}</div>
+                <div className="rounded-t-xl bg-card2 pt-1 font-score text-xl font-extrabold" style={{ height: [64, 48, 36][i] }}>
+                  {podium[i].points}
+                </div>
+              </div>
+            ) : null,
+          )}
+        </div>
+        {se.coinChampion && (
+          <p className="mt-3 text-sm text-muted">
+            🪙 {fr ? "Roi des paris" : "Rey de las apuestas"} : <b className="text-text">{se.coinChampion}</b>
+          </p>
+        )}
+        <button
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rematch", code, token }) });
+            setBusy(false);
+            if (!r.ok) return;
+            const d = await r.json();
+            update((p) => ({ friendLeagues: [...(p.friendLeagues ?? []), { code: d.code, token: d.token, name: d.name }] }));
+          }}
+          className="mt-4 w-full rounded-2xl bg-brand py-3 font-extrabold text-white disabled:opacity-50"
+        >
+          {fr ? "Lancer une nouvelle saison" : "Empezar una nueva temporada"}
+        </button>
+      </section>
+    );
+  }
+
+  const total = se.endsAt ? new Date(se.endsAt).getTime() - new Date(se.startsAt).getTime() : 0;
+  const done = total ? Math.min(1, (Date.now() - new Date(se.startsAt).getTime()) / total) : 0;
+  const daysLeft = se.endsAt ? Math.max(0, Math.ceil((new Date(se.endsAt).getTime() - Date.now()) / 86400000)) : null;
+  return (
+    <section className="rounded-2xl bg-card p-4">
+      <div className="flex items-baseline justify-between">
+        <span className="font-bold">
+          {fr ? "Journée" : "Jornada"} {se.currentRound}
+          {se.totalRounds ? ` / ${se.totalRounds}` : ""}
+        </span>
+        {daysLeft !== null && (
+          <span className="text-sm text-muted">
+            {fr ? `Fin dans ${daysLeft} j` : `Termina en ${daysLeft} d`} · {fmt(se.endsAt)}
+          </span>
+        )}
+      </div>
+      {total > 0 && (
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-card2">
+          <div className="h-full rounded-full bg-gold" style={{ width: `${Math.round(done * 100)}%` }} />
+        </div>
+      )}
+      <p className="mt-2 text-xs text-muted">
+        {fr ? "Du" : "Del"} {fmt(se.startsAt)} {fr ? "au" : "al"} {se.endsAt ? fmt(se.endsAt) : "—"} ·{" "}
+        {fr ? "le champion est celui qui a le plus de points à la fin." : "gana quien tenga más puntos al final."}
+      </p>
+    </section>
+  );
+}
+
+function Rounds({ st }: { st: any }) {
+  const { lang } = useApp();
+  const fr = lang === "fr";
+  const rounds = [...(st.season?.rounds ?? [])].reverse();
+  const fmt = (iso: string) => new Date(iso).toLocaleDateString(fr ? "fr-FR" : "es-CL", { day: "numeric", month: "short" });
+  if (!rounds.length) return null;
+  return (
+    <div className="space-y-2.5">
+      {rounds.map((r: any) => (
+        <section key={r.round} className={`rounded-2xl bg-card p-4 ${!r.done ? "border border-gold/40" : ""}`}>
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="font-bold">
+              {fr ? "Journée" : "Jornada"} {r.round} {!r.done && <span className="ml-1 text-xs text-gold">{fr ? "en cours" : "en curso"}</span>}
+            </span>
+            <span className="text-xs text-muted">
+              {fmt(r.from)} – {fmt(r.to)}
+            </span>
+          </div>
+          {r.done && (
+            <p className="mb-2 text-sm">
+              🏅 {r.winners.length ? r.winners.join(" & ") : fr ? "Pas de vainqueur" : "Sin ganador"}
+            </p>
+          )}
+          <ol className="space-y-1 text-sm">
+            {r.standings.slice(0, 5).map((x: any, i: number) => (
+              <li key={x.name} className="flex justify-between">
+                <span className="text-muted">
+                  {i + 1}. {x.name}
+                </span>
+                <span className="font-score font-bold">{x.points} pts</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
     </div>
   );
 }
