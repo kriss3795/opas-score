@@ -212,7 +212,8 @@ export async function matchDetail(league: string, id: string) {
 
   // --- Forma reciente ---
   const form: Record<string, { result: string; opp: string; score: string; date: string; home: boolean }[]> = {};
-  for (const b of d.boxscore?.form ?? d.lastFiveGames ?? d.boxscore?.lastFiveGames ?? []) {
+  const formSrc: any[] = [d.boxscore?.form, d.lastFiveGames, d.boxscore?.lastFiveGames].find((x: any) => Array.isArray(x) && x.length) ?? [];
+  for (const b of formSrc) {
     const tid = String(b.team?.id ?? "");
     form[tid] = (b.events ?? [])
       .map((e: any) => ({
