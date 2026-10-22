@@ -37,6 +37,7 @@ export function useAgenda(range?: { from: Date; to: Date }) {
   const [events, setEvents] = useState<SportEvent[] | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const [error, setError] = useState(false);
+  const [updated, setUpdated] = useState<Date | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Generación actual: una respuesta de una petición vieja (otra pantalla, otros favoritos) se descarta
   // y no programa más refrescos, así no quedan ciclos de consultas corriendo en segundo plano.
@@ -55,6 +56,7 @@ export function useAgenda(range?: { from: Date; to: Date }) {
       const d = await r.json();
       if (my !== gen.current) return;
       setEvents(d.events ?? []);
+      setUpdated(new Date());
       setFailed(d.failed ?? []);
       setError(false);
       live = (d.events ?? []).some((e: SportEvent) => e.status === "in");
@@ -82,5 +84,5 @@ export function useAgenda(range?: { from: Date; to: Date }) {
     };
   }, [load]);
 
-  return { events, failed, error, reload: load };
+  return { events, failed, error, updated, reload: load };
 }

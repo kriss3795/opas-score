@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import BackButton from "@/components/BackButton";
+
 import { use, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/client/store";
 import { fmtDay, fmtTime, isInFrance, locale } from "@/lib/i18n";
@@ -9,7 +10,7 @@ import { leaderLabel, periodLabels, roleLabel, scoreTypeLabel, statLabel } from 
 import TeamLogo from "@/components/TeamLogo";
 import { EloBar, FactsCard } from "@/components/Facts";
 import Pitch from "@/components/Pitch";
-import { IconBack, IconSofa, IconTv } from "@/components/Icons";
+import { IconSofa, IconTv } from "@/components/Icons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -191,6 +192,20 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
           </div>
         )}
         <Linescores m={m} />
+        {m.state !== "pre" && !off && m.home && m.away && (
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(
+              `${sportMeta(meta?.sport ?? "football").emoji} ${m.home.name} ${m.home.score}-${m.away.score} ${m.away.name}` +
+                `${m.home.pen !== undefined && m.away.pen !== undefined ? ` (${m.home.pen}-${m.away.pen} ${fr ? "t.a.b." : "pen."})` : ""}` +
+                ` · ${live ? status : t("final")} · ${meta?.name[lang] ?? ""}\n— Opa's Score`,
+            )}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mx-auto mt-4 flex w-fit items-center gap-1.5 rounded-full bg-[#25D366] px-4 py-1.5 text-sm font-bold text-white"
+          >
+            {fr ? "Partager le score" : "Compartir el marcador"}
+          </a>
+        )}
         {(tv || m.venue) && (
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-muted">
             {tv && (
@@ -256,11 +271,7 @@ function TeamHead({ s }: { s: any }) {
 }
 
 function Back() {
-  return (
-    <Link href="/" className="inline-flex items-center rounded-full bg-card p-2">
-      <IconBack className="h-5 w-5" />
-    </Link>
-  );
+  return <BackButton />;
 }
 
 function Card({ title, children }: { title?: string; children: React.ReactNode }) {

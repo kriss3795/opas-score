@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
+import BackButton from "@/components/BackButton";
+
 import { use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useApp } from "@/lib/client/store";
 import { fmtDay, fmtTime } from "@/lib/i18n";
 import { leagueMeta, sportMeta } from "@/lib/catalog";
-import { IconBack } from "@/components/Icons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -81,9 +81,7 @@ export default function EventPage({ params }: { params: Promise<{ league: string
 
   return (
     <div className="pt-safe space-y-4 px-4 pb-4">
-      <Link href="/" className="mt-1 inline-flex items-center rounded-full bg-card p-2">
-        <IconBack className="h-5 w-5" />
-      </Link>
+      <BackButton className="mt-1" />
       {ev === undefined && <div className="h-48 animate-pulse rounded-3xl bg-card" />}
       {ev === null && <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">{t("dataError")}</p>}
       {ev && (

@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import BackButton from "@/components/BackButton";
+
 import { use, useEffect, useState } from "react";
 import { useApp } from "@/lib/client/store";
 import { fmtDay, fmtTime } from "@/lib/i18n";
-import { IconBack } from "@/components/Icons";
 
 import { roundLabel } from "@/lib/tennisRound";
 
@@ -44,7 +44,7 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
   if (m === null)
     return (
       <div className="pt-safe p-4">
-        <Link href="/" className="inline-flex rounded-full bg-card p-2"><IconBack className="h-5 w-5" /></Link>
+        <BackButton />
         <p className="mt-6 rounded-2xl bg-card px-5 py-8 text-center text-muted">{t("dataError")}</p>
       </div>
     );
@@ -95,7 +95,7 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
 
   return (
     <div className="pt-safe space-y-4 px-4 pb-4">
-      <Link href="/" className="mt-1 inline-flex rounded-full bg-card p-2"><IconBack className="h-5 w-5" /></Link>
+      <BackButton className="mt-1" />
       <section className="rounded-3xl bg-card p-5">
         <div className="text-xs font-bold tracking-wider text-muted uppercase">
           🎾 {m.tournament} · {m.tour.toUpperCase()}

@@ -7,6 +7,7 @@ import { useApp } from "@/lib/client/store";
 import { useAgenda } from "@/lib/client/useEvents";
 import { dayKey, fmtDay, locale } from "@/lib/i18n";
 import { leagueMeta, sportMeta } from "@/lib/catalog";
+import { gpName } from "@/lib/f1names";
 import { isStandalone, platform } from "@/lib/client/push";
 import EventCard from "@/components/EventCard";
 import type { SportEvent } from "@/lib/types";
@@ -21,14 +22,32 @@ const midnight = (ymd: string) => {
 export default function Home() {
   const { t, lang, prefs } = useApp();
   // null = "Mi programa" (lo próximo); una fecha = todo lo de ese día (resultados o programa).
-  const [day, setDay] = useState<string | null>(null);
+  const [day, setDayState] = useState<string | null>(null);
+  // El día elegido se recuerda al entrar a un partido y volver.
+  useEffect(() => {
+    try {
+      const d = sessionStorage.getItem("opas-day");
+      if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setDayState(d);
+    } catch {
+      /* sin almacenamiento */
+    }
+  }, []);
+  const setDay = (d: string | null) => {
+    setDayState(d);
+    try {
+      if (d) sessionStorage.setItem("opas-day", d);
+      else sessionStorage.removeItem("opas-day");
+    } catch {
+      /* sin almacenamiento */
+    }
+  };
   const range = useMemo(() => {
     if (!day) return undefined;
     const from = midnight(day);
     const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1);
     return { from, to };
   }, [day]);
-  const { events, error, failed } = useAgenda(range);
+  const { events, error, failed, updated, reload } = useAgenda(range);
   const [showInstall, setShowInstall] = useState(false);
 
   useEffect(() => {
@@ -63,8 +82,12 @@ export default function Home() {
     const isFollowed = (e: SportEvent) => prefs.important.includes(`${e.sport}:${e.id}`) || prefs.important.includes(e.id);
     const followed = events.filter((e) => isFollowed(e) && e.status !== "post");
     const fset = new Set(followed.map((e) => `${e.sport}:${e.id}`));
-    return { followed, live: live.filter((e) => !fset.has(`${e.sport}:${e.id}`)), byDay: byDay.map((g) => ({ ...g, items: g.items.filter((e) => !fset.has(`${e.sport}:${e.id}`)) })).filter((g) => g.items.length), recent };
-  }, [events, lang, prefs.important]);
+    // Próximo partido de un favorito (o seguido), para la cuenta regresiva.
+    const isFav = (e: SportEvent) =>
+      favIds.has(`${e.sport}:${e.home?.id}`) || favIds.has(`${e.sport}:${e.away?.id}`) || isFollowed(e) || (prefs.athletes ?? []).some((a) => a.teamId && (a.teamId === e.home?.id || a.teamId === e.away?.id));
+    const next = upcoming.filter((e) => e.status === "pre" && !e.allDay).find(isFav) ?? null;
+    return { next, followed, live: live.filter((e) => !fset.has(`${e.sport}:${e.id}`)), byDay: byDay.map((g) => ({ ...g, items: g.items.filter((e) => !fset.has(`${e.sport}:${e.id}`)) })).filter((g) => g.items.length), recent };
+  }, [events, lang, prefs.important, prefs.athletes, favIds]);
 
   return (
     <div className="pt-safe px-4">
@@ -95,6 +118,15 @@ export default function Home() {
       {!error && failed.length > 0 && events && events.length > 0 && <Notice text={lang === "fr" ? "Une source ne répond pas pour le moment : nouvel essai automatique." : "Una fuente no responde por ahora: se reintenta sola."} small />}
 
       {!events && !error && <Skeleton />}
+
+      {events && updated && (
+        <button onClick={() => reload()} className="-mt-2 mb-3 flex items-center gap-1.5 text-xs text-muted">
+          ↻ {lang === "fr" ? "Mis à jour à" : "Actualizado a las"}{" "}
+          {updated.toLocaleTimeString(locale(lang), { hour: "2-digit", minute: "2-digit", hour12: false })}
+        </button>
+      )}
+
+      {!day && groups?.next && <NextUp e={groups.next} />}
 
       {day && events && <DayView events={events} favIds={favIds} day={day} />}
 
@@ -174,10 +206,11 @@ function DateStrip({ day, onChange }: { day: string | null; onChange: (d: string
   const fr = lang === "fr";
   const ref = useRef<HTMLDivElement>(null);
   const today = ymdLocal(new Date());
+  // Se recalcula si cambia el día (app abierta pasada la medianoche).
   const days = useMemo(() => {
-    const base = new Date();
+    const base = midnight(today);
     return Array.from({ length: 61 }, (_, i) => ymdLocal(new Date(base.getFullYear(), base.getMonth(), base.getDate() + i - 30)));
-  }, []);
+  }, [today]);
   // Centra el día elegido (o hoy) en la tira.
   useEffect(() => {
     const el = ref.current?.querySelector<HTMLElement>(`[data-day="${day ?? today}"]`);
@@ -264,5 +297,38 @@ function DayView({ events, favIds, day }: { events: SportEvent[]; favIds: Set<st
         </Section>
       ))}
     </div>
+  );
+}
+
+
+// Cuenta regresiva hasta el próximo partido de tus favoritos.
+function NextUp({ e }: { e: SportEvent }) {
+  const { lang } = useApp();
+  const fr = lang === "fr";
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
+  const ms = new Date(e.start).getTime() - now;
+  if (ms <= 0) return null;
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const left = d > 0 ? `${d} ${fr ? "j" : "d"} ${h} h` : h > 0 ? `${h} h ${m} min` : `${m} min`;
+  const name =
+    e.sport === "f1" ? gpName(e.competitionName, lang) : e.home && e.away ? `${e.home.short ?? e.home.name} – ${e.away.short ?? e.away.name}` : e.title ?? e.competitionName;
+  return (
+    <Link href={e.link ?? "/"} className="mb-5 flex items-center gap-3 rounded-2xl bg-card px-4 py-3">
+      <span className="text-2xl">{sportMeta(e.sport).emoji}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-bold tracking-wide text-muted uppercase">{fr ? "Prochain match" : "Próximo partido"}</span>
+        <span className="block leading-tight font-bold">{name}</span>
+      </span>
+      <span className="text-right">
+        <span className="block text-[11px] text-muted">{fr ? "dans" : "en"}</span>
+        <span className="font-score text-xl font-extrabold whitespace-nowrap text-brand">{left}</span>
+      </span>
+    </Link>
   );
 }
