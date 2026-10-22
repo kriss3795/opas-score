@@ -166,7 +166,7 @@ export async function leagueState(code: string, token?: string) {
   if (!db) return null;
   const { data: lg } = await db.from("fl_leagues").select("code, name, comps, f1, starts_at, ends_at").eq("code", code).maybeSingle();
   if (!lg) return null;
-  const { data: members } = await db.from("fl_members").select("id, name, token").eq("league_code", code);
+  const { data: members } = await db.from("fl_members").select("id, name, token, created_at").eq("league_code", code).order("created_at", { ascending: true });
   const ids = (members ?? []).map((m) => m.id);
   const { data: preds } = ids.length
     ? await db.from("fl_preds").select("member_id, event_key, value, label, start_at").in("member_id", ids)
@@ -276,7 +276,9 @@ export async function leagueState(code: string, token?: string) {
       champion: finished ? table.filter((r) => r.points === table[0]?.points && r.points > 0).map((r) => r.name) : [],
       coinChampion: finished ? [...table].sort((a, b) => b.coins - a.coins)[0]?.name ?? null : null,
     },
-    me: me ? { name: me.name, coins: myWallet?.balance ?? START_COINS, available: myWallet?.available ?? START_COINS } : null,
+    me: me
+      ? { isOwner: members?.[0]?.id === me.id, name: me.name, coins: myWallet?.balance ?? START_COINS, available: myWallet?.available ?? START_COINS, pending: myWallet?.pending ?? 0 }
+      : null,
     myBets,
     table,
     myPreds,

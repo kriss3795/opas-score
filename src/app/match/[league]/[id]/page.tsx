@@ -10,7 +10,7 @@ import { leaderLabel, periodLabels, roleLabel, scoreTypeLabel, statLabel } from 
 import TeamLogo from "@/components/TeamLogo";
 import { EloBar, FactsCard } from "@/components/Facts";
 import Pitch from "@/components/Pitch";
-import { IconSofa, IconTv } from "@/components/Icons";
+import { IconBell, IconSofa, IconTv } from "@/components/Icons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -140,9 +140,12 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
     <div className="pt-safe space-y-4 px-4 pb-4">
       <div className="flex items-center justify-between pt-1">
         <Back />
-        <button onClick={() => setSofa(true)} className="flex items-center gap-2 rounded-full bg-card px-3 py-2 text-sm font-semibold">
-          <IconSofa className="h-5 w-5" /> {fr ? "Mode canapé" : "Modo sofá"}
-        </button>
+        <div className="flex items-center gap-2">
+          {m.state !== "post" && !off && <MuteButton id={id} />}
+          <button onClick={() => setSofa(true)} className="flex items-center gap-2 rounded-full bg-card px-3 py-2 text-sm font-semibold">
+            <IconSofa className="h-5 w-5" /> {fr ? "Mode canapé" : "Modo sofá"}
+          </button>
+        </div>
       </div>
 
       {/* Marcador */}
@@ -267,6 +270,22 @@ function TeamHead({ s }: { s: any }) {
       <span className="text-sm leading-tight font-bold">{s?.name}</span>
       {s?.record && <span className="text-[11px] text-muted">{s.record}</span>}
     </div>
+  );
+}
+
+// Silenciar los avisos de este partido (por ejemplo, si lo estás viendo en vivo y no quieres spoilers).
+function MuteButton({ id }: { id: string }) {
+  const { prefs, update, lang } = useApp();
+  const fr = lang === "fr";
+  const muted = (prefs.muted ?? []).includes(id);
+  return (
+    <button
+      onClick={() => update((p) => ({ muted: muted ? (p.muted ?? []).filter((x) => x !== id) : [...(p.muted ?? []), id].slice(-100) }))}
+      className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold ${muted ? "bg-live/15 text-live" : "bg-card"}`}
+    >
+      <IconBell className="h-5 w-5" off={muted} />
+      {muted ? (fr ? "Muet" : "Silenciado") : fr ? "Notifs" : "Avisos"}
+    </button>
   );
 }
 

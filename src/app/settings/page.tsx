@@ -6,7 +6,7 @@ import { useApp } from "@/lib/client/store";
 import { leagueMeta, sportMeta } from "@/lib/catalog";
 import { currentSubscription, delayedTest, enablePush, isStandalone, platform, pushHealth, pushSupported, sendTest } from "@/lib/client/push";
 import TeamLogo from "@/components/TeamLogo";
-import { agendaParams } from "@/lib/client/useEvents";
+import { pushParams } from "@/lib/client/useEvents";
 import { playSound, setSoundsEnabled, soundsEnabled, type SoundKind } from "@/lib/client/sounds";
 
 export default function SettingsPage() {
@@ -23,7 +23,7 @@ export default function SettingsPage() {
   }, []);
 
   const activate = async () => {
-    const r = await enablePush(lang, agendaParams(prefs));
+    const r = await enablePush(lang, pushParams(prefs));
     if (r === "ok") setNotif("on");
     else if (r === "denied") setNotif("denied");
     else setMsg(t("dataError"));

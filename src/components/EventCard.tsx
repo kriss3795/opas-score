@@ -8,7 +8,7 @@ import { leagueMeta, sportMeta, F1_TV_FR } from "@/lib/catalog";
 import type { SportEvent, Side } from "@/lib/types";
 import { currentSubscription, enablePush, setReminder } from "@/lib/client/push";
 import TeamLogo from "./TeamLogo";
-import { agendaParams } from "@/lib/client/useEvents";
+import { pushParams } from "@/lib/client/useEvents";
 import { playSound } from "@/lib/client/sounds";
 import { gpName } from "@/lib/f1names";
 import { roundLabel } from "@/lib/tennisRound";
@@ -103,7 +103,8 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
     (e.away?.id && favIds.has(`${e.sport}:${e.away.id}`)) ||
     (e.sport === "tennis" && (prefs.players ?? []).some((p) => p.id === e.home?.id || p.id === e.away?.id || p.name === e.home?.name || p.name === e.away?.name)) ||
     (prefs.athletes ?? []).some((a) => a.sport === e.sport && a.teamId && (a.teamId === e.home?.id || a.teamId === e.away?.id));
-  const important = Boolean(autoFollowed) || prefs.important.includes(key) || prefs.important.includes(e.id);
+  const muted = (prefs.muted ?? []).includes(e.id);
+  const important = (Boolean(autoFollowed) && !muted) || prefs.important.includes(key) || prefs.important.includes(e.id);
   const [busy, setBusy] = useState(false);
 
   // Animación sutil cuando cambia el marcador.
@@ -117,7 +118,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
     const lowScoring = ["football", "rugby", "hockey"].includes(e.sport);
     if (lowScoring && wasNumeric && total(now) > total(prev.current) && e.status === "in") {
       setFlash(true);
-      if (important || fav(e.home) || fav(e.away)) playSound(e.sport === "football" ? "goal" : "reminder");
+      if (!muted && (important || fav(e.home) || fav(e.away))) playSound(e.sport === "football" ? "goal" : "reminder");
       const id = setTimeout(() => setFlash(false), 2500);
       prev.current = now;
       return () => clearTimeout(id);
@@ -131,19 +132,16 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
     ev.preventDefault();
     ev.stopPropagation();
     if (busy) return;
+    // Partido de un favorito: la campana lo silencia o lo vuelve a activar (p. ej. si lo estás viendo en la tele).
     if (autoFollowed) {
-      alert(
-        lang === "fr"
-          ? "Tu suis cette équipe ou ce joueur : les notifications de ce match sont toujours activées."
-          : "Sigues a este equipo o jugador: los avisos de este partido están siempre activados.",
-      );
+      update((p) => ({ muted: muted ? (p.muted ?? []).filter((x) => x !== e.id) : [...(p.muted ?? []), e.id].slice(-100) }));
       return;
     }
     setBusy(true);
     try {
       let sub = await currentSubscription();
       if (!sub && !important) {
-        const r = await enablePush(lang, agendaParams(prefs));
+        const r = await enablePush(lang, pushParams(prefs));
         if (r !== "ok") {
           alert(r === "denied" ? t("notifDenied") : t("notifNeedInstall"));
           return;
@@ -256,13 +254,14 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
         </div>
         <div className="flex w-16 shrink-0 flex-col items-end gap-1.5">
           <StatusBadge e={e} />
-          {e.status === "pre" && !e.allDay && (
+          {/* Antes y durante el partido: activar, quitar o silenciar los avisos. */}
+          {(e.status === "pre" || (e.status === "in" && (important || muted))) && !e.allDay && (
             <button
               onClick={toggleRemind}
-              aria-label={important ? t("reminded") : t("remind")}
+              aria-label={muted ? (lang === "fr" ? "Notifications coupées" : "Avisos silenciados") : important ? t("reminded") : t("remind")}
               className={`rounded-full p-1.5 ${important ? "bg-brand/15 text-brand" : "text-muted"} ${busy ? "opacity-50" : ""}`}
             >
-              <IconBell className="h-5 w-5" on={important} />
+              <IconBell className="h-5 w-5" on={important} off={muted} />
             </button>
           )}
         </div>

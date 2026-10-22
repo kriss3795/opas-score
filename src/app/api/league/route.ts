@@ -90,7 +90,8 @@ export async function POST(req: NextRequest) {
     const { error } = await db
       .from("fl_preds")
       .upsert({ member_id: me.id, event_key: ev.key, value, label: ev.label, start_at: ev.start }, { onConflict: "member_id,event_key" });
-    return NextResponse.json({ ok: !error });
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
   }
 
   if (b.action === "bet") {
@@ -114,7 +115,9 @@ export async function POST(req: NextRequest) {
     const { error } = await db
       .from("fl_bets")
       .upsert({ member_id: me.id, event_key: ev.key, pick, stake, odds, label: ev.label, start_at: ev.start }, { onConflict: "member_id,event_key" });
-    return NextResponse.json({ ok: !error });
+    // Si la base rechaza la apuesta, se informa (antes se mostraba "apuesta hecha" aunque no se guardara).
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, available: available - stake });
   }
 
   if (b.action === "rematch") {
@@ -141,6 +144,28 @@ export async function POST(req: NextRequest) {
     const token = newToken();
     await db.from("fl_members").insert({ league_code: newC, name: me.name, token });
     return NextResponse.json({ code: newC, token, name });
+  }
+
+  if (b.action === "delete") {
+    // Quien creó la liga la borra para todos; los demás solo salen de ella.
+    const code = cleanCode(b.code);
+    const { data: me } = await db.from("fl_members").select("id, league_code").eq("token", String(b.token ?? "")).maybeSingle();
+    if (!me || me.league_code !== code) return NextResponse.json({ error: "auth" }, { status: 403 });
+    const { data: first } = await db
+      .from("fl_members")
+      .select("id")
+      .eq("league_code", code)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (first?.id === me.id) {
+      const { error } = await db.from("fl_leagues").delete().eq("code", code);
+      if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: true, deleted: "league" });
+    }
+    const { error } = await db.from("fl_members").delete().eq("id", me.id);
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, deleted: "member" });
   }
 
   return NextResponse.json({ error: "action" }, { status: 400 });

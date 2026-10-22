@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { useApp } from "@/lib/client/store";
 import { healPush, registerSW, syncPrefs } from "@/lib/client/push";
-import { agendaParams } from "@/lib/client/useEvents";
+import { pushParams } from "@/lib/client/useEvents";
 import { playSound, unlockAudio } from "@/lib/client/sounds";
 import Welcome from "./Welcome";
 import { sportMeta } from "@/lib/catalog";
@@ -29,7 +29,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Mantiene al servidor al día con los favoritos (para el resumen matinal).
-  const q = agendaParams(prefs);
+  const q = pushParams(prefs);
   const morning = prefs.morning !== false;
   useEffect(() => {
     if (!ready || !prefs.onboarded) return;

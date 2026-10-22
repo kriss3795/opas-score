@@ -9,6 +9,12 @@ import { autoFollow } from "@/lib/server/autofollow";
 
 export const maxDuration = 60;
 
+// Partidos que el usuario silenció (desde la campana): no se les envía nada.
+const isMuted = (prefs: any, eventId: string) =>
+  String(prefs?.muted ?? "")
+    .split(",")
+    .includes(String(eventId));
+
 export const dynamic = "force-dynamic";
 
 // Lo llama cron-job.org cada minuto. Envía los avisos de 15 min antes
@@ -54,9 +60,13 @@ async function run(req: NextRequest) {
   let sent = 0;
   const failures: string[] = [];
   for (const r of due ?? []) {
-    const { data: s } = await db.from("push_subs").select("sub").eq("endpoint", r.endpoint).maybeSingle();
+    const { data: s } = await db.from("push_subs").select("sub, prefs").eq("endpoint", r.endpoint).maybeSingle();
     if (!s) {
       await db.from("reminders").delete().eq("id", r.id);
+      continue;
+    }
+    if (isMuted(s.prefs, r.event_id)) {
+      await db.from("reminders").update({ sent: true }).eq("id", r.id);
       continue;
     }
     const minutes = Math.round((new Date(r.start_at).getTime() - now) / 60000);
@@ -98,9 +108,15 @@ async function run(req: NextRequest) {
       if (!st) continue;
       const prev = f.last_state ?? null;
       if (prev?.s === "post") continue;
-      const { data: subRow } = await db.from("push_subs").select("sub, lang").eq("endpoint", f.endpoint).maybeSingle();
+      const { data: subRow } = await db.from("push_subs").select("sub, lang, prefs").eq("endpoint", f.endpoint).maybeSingle();
       if (!subRow) continue;
       const mine = { ...st.state };
+      // Silenciado: se sigue guardando el estado (para no avisar en bloque si lo reactiva), pero no se envía nada.
+      if (isMuted(subRow.prefs, f.event_id)) {
+        liveAlerts(prev, mine, st.e, st.keyEvents, "fr", "/");
+        if (JSON.stringify(prev) !== JSON.stringify(mine)) await db.from("reminders").update({ last_state: mine }).eq("id", f.id);
+        continue;
+      }
       // Aplazado o suspendido: se deja de seguir (se marca como terminado sin avisar).
       if (mine.s === "cancelled") {
         await db.from("reminders").update({ last_state: { ...mine, s: "post" } }).eq("id", f.id);
@@ -156,8 +172,9 @@ async function run(req: NextRequest) {
       }
       winner = winners.get(k) ?? null;
     }
-    const { data: subRow } = await db.from("push_subs").select("sub, lang").eq("endpoint", f.endpoint).maybeSingle();
+    const { data: subRow } = await db.from("push_subs").select("sub, lang, prefs").eq("endpoint", f.endpoint).maybeSingle();
     if (!subRow) continue;
+    if (isMuted(subRow.prefs, f.event_id)) continue;
     const raceName = String(f.title ?? "").replace(/^\S+\s*/, "") || "Grand Prix";
     const res = f1Alerts(f.last_state, session, f.start_at, raceName, winner, subRow.lang === "es" ? "es" : "fr", f.url ?? "/gp");
     for (const al of res.alerts) if ((await sendPush(subRow.sub, al)) === "ok") live++;

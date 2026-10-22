@@ -31,6 +31,13 @@ export function agendaParams(prefs: Prefs) {
   return p.toString();
 }
 
+// Lo que recibe el servidor de avisos: los favoritos más los partidos silenciados.
+export function pushParams(prefs: Prefs) {
+  const q = agendaParams(prefs);
+  const muted = (prefs.muted ?? []).slice(-100);
+  return muted.length ? `${q}${q ? "&" : ""}muted=${encodeURIComponent(muted.join(","))}` : q;
+}
+
 // Agenda personal: pide al servidor solo lo que el usuario sigue y se refresca solo.
 export function useAgenda(range?: { from: Date; to: Date }) {
   const { prefs } = useApp();

@@ -38,10 +38,11 @@ export const IconSettings = ({ className }: P) => (
   </svg>
 );
 
-export const IconBell = ({ className, on }: P & { on?: boolean }) => (
-  <svg viewBox="0 0 24 24" className={className} {...base} fill={on ? "currentColor" : "none"}>
+export const IconBell = ({ className, on, off }: P & { on?: boolean; off?: boolean }) => (
+  <svg viewBox="0 0 24 24" className={className} {...base} fill={on && !off ? "currentColor" : "none"}>
     <path d="M6 16V11a6 6 0 1112 0v5l1.5 2h-15z" />
     <path d="M10 20.5a2 2 0 004 0" fill="none" />
+    {off && <path d="M3 3l18 18" />}
   </svg>
 );
 

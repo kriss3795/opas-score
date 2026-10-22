@@ -123,6 +123,7 @@ export interface Prefs {
   onboarded: boolean;
   welcomed: boolean;
   morning?: boolean; // resumen matinal (por defecto activado)
+  muted?: string[]; // ids de partidos silenciados (sin avisos aunque sean de un favorito)
   friendLeagues?: { code: string; token: string; name: string }[];
 }
 

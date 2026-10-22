@@ -37,9 +37,23 @@ function LeagueInner() {
       setActive((ev as CustomEvent<string>).detail);
       setMode("view");
     };
+    // Liga eliminada o abandonada: se quita de la lista del teléfono y se pasa a otra.
+    const removed = (ev: Event) => {
+      const c = (ev as CustomEvent<string>).detail;
+      update((p) => {
+        const rest = (p.friendLeagues ?? []).filter((x) => x.code !== c);
+        setActive(rest[0]?.code ?? null);
+        setMode(rest.length ? "view" : "create");
+        return { friendLeagues: rest };
+      });
+    };
     window.addEventListener("opas-open-league", open);
-    return () => window.removeEventListener("opas-open-league", open);
-  }, []);
+    window.addEventListener("opas-league-removed", removed);
+    return () => {
+      window.removeEventListener("opas-open-league", open);
+      window.removeEventListener("opas-league-removed", removed);
+    };
+  }, [update]);
 
   const current = mine.find((l) => l.code === active);
 
@@ -285,7 +299,20 @@ function LeagueView({ code, token }: { code: string; token: string }) {
   }, [code, fr]);
 
   if (st === undefined) return <div className="h-64 animate-pulse rounded-3xl bg-card" />;
-  if (st === null) return <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">{fr ? "Ligue indisponible pour le moment." : "Liga no disponible por ahora."}</p>;
+  if (st === null)
+    return (
+      <div className="space-y-3">
+        <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">
+          {fr ? "Ligue indisponible (peut-être supprimée par son créateur)." : "Liga no disponible (quizás su creador la eliminó)."}
+        </p>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("opas-league-removed", { detail: code }))}
+          className="w-full rounded-2xl bg-card py-3 text-sm font-bold text-muted"
+        >
+          {fr ? "Retirer de mes ligues" : "Quitar de mis ligas"}
+        </button>
+      </div>
+    );
 
   const predMap = new Map<string, any>(st.myPreds.map((p: any) => [p.key, p.value]));
   const betMap = new Map<string, any>((st.myBets ?? []).map((b: any) => [b.key, b]));
@@ -308,9 +335,11 @@ function LeagueView({ code, token }: { code: string; token: string }) {
         <section className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3">
           <span className="text-3xl">🪙</span>
           <span className="flex-1">
-            <span className="font-score block text-3xl leading-none font-extrabold text-gold">{st.me.coins}</span>
+            {/* Lo disponible baja apenas se apuesta; lo apostado vuelve (con ganancia) o se pierde al terminar el partido. */}
+            <span className="font-score block text-3xl leading-none font-extrabold text-gold">{st.me.available}</span>
             <span className="text-xs text-muted">
-              {fr ? "jetons" : "fichas"} · {st.me.available} {fr ? "disponibles" : "disponibles"}
+              {fr ? "jetons disponibles" : "fichas disponibles"}
+              {st.me.pending > 0 && ` · ${st.me.pending} ${fr ? "en jeu" : "en juego"}`}
             </span>
           </span>
           <span className="max-w-36 text-right text-[11px] leading-tight text-muted">
@@ -394,13 +423,67 @@ function LeagueView({ code, token }: { code: string; token: string }) {
           <p className="px-1 text-xs text-muted">{fr ? "Résultats officiels : ESPN et Jolpica-F1." : "Resultados oficiales: ESPN y Jolpica-F1."}</p>
         </div>
       )}
+
+      <DeleteLeague code={code} token={token} owner={Boolean(st.me?.isOwner)} />
     </>
+  );
+}
+
+// Eliminar la liga (quien la creó) o salir de ella (los demás). Pide confirmación con dos toques.
+function DeleteLeague({ code, token, owner }: { code: string; token: string; owner: boolean }) {
+  const { lang } = useApp();
+  const fr = lang === "fr";
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const run = async () => {
+    setBusy(true);
+    setErr("");
+    const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", code, token }) }).catch(() => null);
+    setBusy(false);
+    const d = await r?.json().catch(() => null);
+    // Si la liga ya no existe en el servidor, igual se quita del teléfono.
+    if ((r?.ok && d?.ok) || r?.status === 403) window.dispatchEvent(new CustomEvent("opas-league-removed", { detail: code }));
+    else setErr(fr ? "Impossible pour le moment. Réessaie." : "No se pudo por ahora. Inténtalo de nuevo.");
+  };
+  const label = owner ? (fr ? "Supprimer la ligue" : "Eliminar la liga") : fr ? "Quitter la ligue" : "Salir de la liga";
+  return (
+    <div className="pt-4">
+      {!ask ? (
+        <button onClick={() => setAsk(true)} className="w-full rounded-2xl py-3 text-sm font-bold text-live">
+          🗑️ {label}
+        </button>
+      ) : (
+        <div className="space-y-2 rounded-2xl bg-card p-4 text-center">
+          <p className="text-sm">
+            {owner
+              ? fr
+                ? "La ligue sera supprimée pour tous les joueurs, avec ses pronostics et ses paris. C'est définitif."
+                : "La liga se eliminará para todos los jugadores, con sus pronósticos y apuestas. Es definitivo."
+              : fr
+                ? "Tu quittes la ligue : tes pronostics et paris seront supprimés."
+                : "Sales de la liga: tus pronósticos y apuestas se borrarán."}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setAsk(false)} className="flex-1 rounded-xl bg-card2 py-2.5 font-bold">
+              {fr ? "Annuler" : "Cancelar"}
+            </button>
+            <button disabled={busy} onClick={run} className="flex-1 rounded-xl bg-live py-2.5 font-bold text-white disabled:opacity-50">
+              {label}
+            </button>
+          </div>
+          {err && <p className="text-xs text-live">{err}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 
 async function savePred(code: string, token: string, key: string, value: unknown) {
   const r = await fetch("/api/league", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "predict", code, token, key, value }) }).catch(() => null);
-  return Boolean(r?.ok);
+  if (!r?.ok) return false;
+  const d = await r.json().catch(() => null);
+  return d?.ok === true;
 }
 
 function ScorePredict({
@@ -486,8 +569,26 @@ function BetPanel({ e, code, token, bet, available, onSaved }: { e: any; code: s
       body: JSON.stringify({ action: "bet", code, token, key: e.key, pick, stake }),
     }).catch(() => null);
     if (!r) return setMsg(fr ? "Pas de connexion. Réessaie." : "Sin conexión. Inténtalo de nuevo.");
-    setMsg(r.ok ? (fr ? "✓ Pari placé" : "✓ Apuesta hecha") : fr ? "Pari refusé (solde ou match commencé)" : "Apuesta rechazada (saldo o partido empezado)");
-    if (r.ok) onSaved();
+    const d = await r.json().catch(() => null);
+    const ok = r.ok && d?.ok === true;
+    setMsg(
+      ok
+        ? fr
+          ? `✓ Pari placé : ${stake} jetons misés`
+          : `✓ Apuesta hecha: ${stake} fichas apostadas`
+        : r.status === 409
+          ? fr
+            ? "Le match a déjà commencé."
+            : "El partido ya empezó."
+          : r.status === 400
+            ? fr
+              ? "Solde insuffisant."
+              : "Saldo insuficiente."
+            : fr
+              ? "Erreur : pari non enregistré."
+              : "Error: la apuesta no se guardó.",
+    );
+    if (ok) onSaved();
   };
   return (
     <div className="mt-4 border-t border-line pt-3">
