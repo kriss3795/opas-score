@@ -4,21 +4,33 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { useApp } from "@/lib/client/store";
-import { registerSW } from "@/lib/client/push";
+import { registerSW, syncPrefs } from "@/lib/client/push";
+import { agendaParams } from "@/lib/client/useEvents";
 import Welcome from "./Welcome";
 import { sportMeta } from "@/lib/catalog";
 import Onboarding from "./Onboarding";
-import { IconCalendar, IconF1, IconSettings, IconTable } from "./Icons";
+import { IconCalendar, IconF1, IconSettings, IconTable, IconTrophy } from "./Icons";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { prefs, ready, t } = useApp();
+  const { prefs, ready, t, lang } = useApp();
   const path = usePathname();
 
   useEffect(() => {
     registerSW();
   }, []);
 
+  // Mantiene al servidor al día con los favoritos (para el resumen matinal).
+  const q = agendaParams(prefs);
+  const morning = prefs.morning !== false;
+  useEffect(() => {
+    if (!ready || !prefs.onboarded) return;
+    const id = setTimeout(() => syncPrefs(q, lang, morning), 1500);
+    return () => clearTimeout(id);
+  }, [q, lang, morning, ready, prefs.onboarded]);
+
   if (!ready) return <div className="min-h-dvh bg-bg" />;
+  // Los amigos que llegan con un enlace de invitación entran directo a la liga.
+  if (!prefs.welcomed && path.startsWith("/league")) return <div className="mx-auto min-h-dvh max-w-xl">{children}</div>;
   if (!prefs.welcomed) return <Welcome />;
   if (!prefs.onboarded && path !== "/install") return <Onboarding />;
 
@@ -26,6 +38,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { href: "/", label: t("tabProgramme"), icon: IconCalendar, show: true },
     { href: "/tables", label: t("tabTables"), icon: IconTable, show: prefs.sports.some((x) => sportMeta(x).kind === "team") },
     { href: "/gp", label: t("tabGP"), icon: IconF1, show: prefs.sports.includes("f1") },
+    { href: "/league", label: lang === "fr" ? "Ligue" : "Liga", icon: IconTrophy, show: true },
     { href: "/settings", label: t("tabSettings"), icon: IconSettings, show: true },
   ].filter((x) => x.show);
 
@@ -42,7 +55,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className={`flex flex-1 flex-col items-center gap-1 pt-2.5 pb-1 text-[11px] font-semibold transition-colors ${
+                className={`flex min-w-0 flex-1 flex-col items-center gap-1 pt-2.5 pb-1 text-[10.5px] leading-tight font-semibold transition-colors ${
                   on ? "text-brand" : "text-muted"
                 }`}
               >

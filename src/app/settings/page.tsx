@@ -6,6 +6,7 @@ import { useApp } from "@/lib/client/store";
 import { leagueMeta, sportMeta } from "@/lib/catalog";
 import { currentSubscription, enablePush, isStandalone, platform, pushSupported, sendTest } from "@/lib/client/push";
 import TeamLogo from "@/components/TeamLogo";
+import { agendaParams } from "@/lib/client/useEvents";
 
 export default function SettingsPage() {
   const { t, lang, prefs, update } = useApp();
@@ -21,7 +22,7 @@ export default function SettingsPage() {
   }, []);
 
   const activate = async () => {
-    const r = await enablePush(lang);
+    const r = await enablePush(lang, agendaParams(prefs));
     if (r === "ok") setNotif("on");
     else if (r === "denied") setNotif("denied");
     else setMsg(t("dataError"));
@@ -95,6 +96,18 @@ export default function SettingsPage() {
               <p className="font-semibold text-football">✓ {t("notifOn")}</p>
               <button onClick={async () => setMsg((await sendTest()) ? "✓" : t("dataError"))} className="w-full rounded-xl bg-card2 py-3 font-semibold">
                 {t("testNotif")}
+              </button>
+              <button
+                onClick={() => update({ morning: prefs.morning === false })}
+                className="flex w-full items-center justify-between rounded-xl bg-card2 px-4 py-3 text-left"
+              >
+                <span>
+                  <span className="block font-semibold">☀️ {lang === "fr" ? "Résumé du matin (8 h)" : "Resumen matinal (8:00)"}</span>
+                  <span className="block text-xs text-muted">{lang === "fr" ? "Les résultats d'hier et le programme du jour." : "Los resultados de ayer y lo que hay hoy."}</span>
+                </span>
+                <span className={`h-7 w-12 shrink-0 rounded-full p-1 transition-colors ${prefs.morning !== false ? "bg-brand" : "bg-line"}`}>
+                  <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${prefs.morning !== false ? "translate-x-5" : ""}`} />
+                </span>
               </button>
             </>
           )}

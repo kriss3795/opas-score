@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
     sub,
     lang: body.lang === "es" ? "es" : "fr",
     tz: typeof body.tz === "string" ? body.tz.slice(0, 64) : null,
+    ...(typeof body.query === "string" && body.query
+      ? { prefs: Object.fromEntries(new URLSearchParams(body.query.slice(0, 4000)).entries()) }
+      : {}),
   });
   return NextResponse.json({ ok: !error });
 }

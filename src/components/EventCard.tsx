@@ -8,6 +8,7 @@ import { leagueMeta, sportMeta, F1_TV_FR } from "@/lib/catalog";
 import type { SportEvent, Side } from "@/lib/types";
 import { currentSubscription, enablePush, setReminder } from "@/lib/client/push";
 import TeamLogo from "./TeamLogo";
+import { agendaParams } from "@/lib/client/useEvents";
 import { IconBell, IconTv } from "./Icons";
 
 const SESSION_KEY: Record<string, Key> = {
@@ -77,7 +78,7 @@ export default function EventCard({ e, favIds }: { e: SportEvent; favIds: Set<st
     try {
       let sub = await currentSubscription();
       if (!sub && !important) {
-        const r = await enablePush(lang);
+        const r = await enablePush(lang, agendaParams(prefs));
         if (r !== "ok") {
           alert(r === "denied" ? t("notifDenied") : t("notifNeedInstall"));
           return;

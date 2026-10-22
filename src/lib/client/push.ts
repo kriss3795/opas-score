@@ -47,7 +47,7 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
   return (await reg?.pushManager.getSubscription()) ?? null;
 }
 
-export async function enablePush(lang: string): Promise<"ok" | "denied" | "unsupported" | "error"> {
+export async function enablePush(lang: string, query = ""): Promise<"ok" | "denied" | "unsupported" | "error"> {
   if (!pushSupported()) return "unsupported";
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return "denied";
@@ -63,7 +63,7 @@ export async function enablePush(lang: string): Promise<"ok" | "denied" | "unsup
   const res = await fetch("/api/push/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sub: sub.toJSON(), lang, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    body: JSON.stringify({ sub: sub.toJSON(), lang, query, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
   });
   return res.ok ? "ok" : "error";
 }
@@ -95,4 +95,15 @@ export async function sendTest(): Promise<boolean> {
     body: JSON.stringify({ endpoint: sub.endpoint }),
   });
   return res.ok;
+}
+
+// Envía las preferencias al servidor para el resumen matinal (solo si las notificaciones están activas).
+export async function syncPrefs(query: string, lang: string, morning: boolean) {
+  const sub = await currentSubscription();
+  if (!sub) return;
+  await fetch("/api/push/prefs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint, query, lang, morning, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+  }).catch(() => undefined);
 }

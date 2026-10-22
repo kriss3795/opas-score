@@ -102,6 +102,8 @@ export interface Prefs {
   theme: "dark" | "light";
   onboarded: boolean;
   welcomed: boolean;
+  morning?: boolean; // resumen matinal (por defecto activado)
+  friendLeagues?: { code: string; token: string; name: string }[];
 }
 
 export const DEFAULT_PREFS: Prefs = {

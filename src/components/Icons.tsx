@@ -88,3 +88,10 @@ export const IconSofa = ({ className }: P) => (
 export function SportIcon({ sport, className }: { sport: string; className?: string }) {
   return sport === "f1" ? <IconF1 className={className} /> : <IconBall className={className} />;
 }
+
+export const IconTrophy = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M7 4h10v5a5 5 0 01-10 0z" />
+    <path d="M7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3M12 14v4M8 21h8M9 18h6" />
+  </svg>
+);

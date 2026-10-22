@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supa, sendPush } from "@/lib/server/push";
+import { isMorning, localDate, morningSummary } from "@/lib/server/morning";
 
 export const dynamic = "force-dynamic";
 
@@ -46,5 +47,21 @@ export async function GET(req: NextRequest) {
   // Limpieza de avisos viejos.
   await db.from("reminders").delete().lt("start_at", new Date(now - 2 * 86400000).toISOString());
 
-  return NextResponse.json({ ok: true, due: due?.length ?? 0, sent });
+  // Resumen matinal a las 8:00 en la hora local de cada teléfono.
+  let mornings = 0;
+  const { data: subs } = await db.from("push_subs").select("endpoint, sub, lang, tz, prefs, morning, last_morning").eq("morning", true).limit(50);
+  for (const s of subs ?? []) {
+    const tz = s.tz || "Europe/Paris";
+    if (!s.prefs || !isMorning(tz)) continue;
+    const today = localDate(tz);
+    if (s.last_morning === today) continue;
+    await db.from("push_subs").update({ last_morning: today }).eq("endpoint", s.endpoint);
+    const sum = await morningSummary(s.prefs, s.lang === "es" ? "es" : "fr", tz);
+    if (!sum) continue;
+    const r = await sendPush(s.sub, { title: sum.title, body: sum.body, url: "/", tag: `morning-${today}` });
+    if (r === "gone") await db.from("push_subs").delete().eq("endpoint", s.endpoint);
+    if (r === "ok") mornings++;
+  }
+
+  return NextResponse.json({ ok: true, due: due?.length ?? 0, sent, mornings });
 }
