@@ -34,6 +34,8 @@ self.addEventListener("push", (event) => {
         badge: "/icons/icon-192.png",
         tag: data.tag,
         renotify: Boolean(data.tag),
+        // Con sonido y vibración (el tono lo pone el teléfono según los ajustes de notificaciones de la app).
+        silent: false,
         vibrate: VIBRATE[kind] || VIBRATE.reminder,
         data: { url: data.url || "/" },
       });
@@ -79,7 +81,7 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // Red primero; si no hay conexión, se sirve la última versión guardada de la página.
-const CACHE = "opas-v3";
+const CACHE = "opas-v4";
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || req.mode !== "navigate") return;

@@ -269,7 +269,11 @@ function DayView({ events, favIds, day }: { events: SportEvent[]; favIds: Set<st
   const fr = lang === "fr";
   const groups = useMemo(() => {
     const m = new Map<string, { title: string; items: SportEvent[] }>();
+    const isToday = day === ymdLocal(new Date());
     for (const e of events) {
+      // Seguridad extra: solo lo que cae en ese día (hora del teléfono); un torneo en curso, solo en "hoy".
+      const sameDay = ymdLocal(new Date(e.start)) === day;
+      if (!sameDay && !(isToday && e.allDay && e.status === "in")) continue;
       const k = e.competitionId;
       const meta = sportMeta(e.sport);
       const title = `${meta.emoji} ${e.sport === "f1" ? meta.name[lang] : leagueMeta(k)?.name[lang] ?? e.competitionName}`;
@@ -279,9 +283,9 @@ function DayView({ events, favIds, day }: { events: SportEvent[]; favIds: Set<st
     // Primero las competiciones con partidos de tus favoritos.
     const fav = (e: SportEvent) => favIds.has(`${e.sport}:${e.home?.id}`) || favIds.has(`${e.sport}:${e.away?.id}`);
     return Array.from(m.values()).sort((a, b) => Number(b.items.some(fav)) - Number(a.items.some(fav)));
-  }, [events, favIds, lang]);
+  }, [events, favIds, lang, day]);
   const label = fmtDay(midnight(day).toISOString(), lang);
-  if (!events.length)
+  if (!groups.length)
     return (
       <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">
         {label} : {fr ? "rien pour tes sports et favoris ce jour-là." : "nada de tus deportes y favoritos ese día."}

@@ -24,7 +24,10 @@ export async function GET(req: NextRequest) {
   const events = all.filter((e) => {
     const t = new Date(e.start).getTime();
     // Torneos de varios días (golf) que empezaron antes siguen apareciendo mientras se juegan.
-    return (t >= from.getTime() && t < to.getTime()) || (e.status === "in" && t < to.getTime());
+    if (t >= from.getTime() && t < to.getTime()) return true;
+    // Solo un torneo de varios días (golf) que se está jugando ahora sigue apareciendo en el día de hoy.
+    // (Antes un partido en vivo de hoy aparecía también en mañana y los días siguientes.)
+    return Boolean(e.allDay) && e.status === "in" && from.getTime() <= now.getTime() && now.getTime() < to.getTime();
   });
   return NextResponse.json(
     { events, failed, updated: now.toISOString() },

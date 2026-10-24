@@ -322,8 +322,18 @@ function PushDoctor() {
       </button>
       {platform() === "android" && (
         <details className="text-sm">
-          <summary className="cursor-pointer font-semibold">{fr ? "Si rien n'arrive (Android)" : "Si no llega nada (Android)"}</summary>
+          <summary className="cursor-pointer font-semibold">{fr ? "Si rien n'arrive ou sans son (Android)" : "Si no llega nada o llega sin sonido (Android)"}</summary>
           <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-muted">
+            <li>
+              {fr
+                ? "Sans son : Paramètres → Applications → Opa's Score → Notifications → touche chaque catégorie → « Son » activé (et pas « Silencieux »). Fais pareil dans Chrome si l'app n'apparaît pas."
+                : "Sin sonido: Ajustes → Aplicaciones → Opa's Score → Notificaciones → toca cada categoría → «Sonido» activado (no «Silencioso»). Haz lo mismo en Chrome si la app no aparece."}
+            </li>
+            <li>
+              {fr
+                ? "Android 15 : Paramètres → Notifications → « Atténuation des notifications » désactivée (sinon les buts à la suite sonnent moins fort)."
+                : "Android 15: Ajustes → Notificaciones → «Enfriamiento de notificaciones» desactivado (si no, los avisos seguidos suenan cada vez más bajo)."}
+            </li>
             <li>{fr ? "Paramètres → Applications → Chrome → Notifications : activées, avec son." : "Ajustes → Aplicaciones → Chrome → Notificaciones: activadas y con sonido."}</li>
             <li>{fr ? "Paramètres → Applications → Chrome → Batterie : « Non restreinte »." : "Ajustes → Aplicaciones → Chrome → Batería: «Sin restricciones»."}</li>
             <li>{fr ? "Fais pareil pour l'app « Opa's Score » si elle apparaît dans la liste." : "Haz lo mismo con la app «Opa's Score» si aparece en la lista."}</li>
