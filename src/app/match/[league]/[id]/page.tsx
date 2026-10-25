@@ -2,7 +2,7 @@
 
 import BackButton from "@/components/BackButton";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/client/store";
 import { fmtDay, fmtTime, isInFrance, locale } from "@/lib/i18n";
 import { leagueMeta, sportMeta } from "@/lib/catalog";
@@ -14,7 +14,7 @@ import { IconBell, IconSofa, IconTv } from "@/components/Icons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type Tab = "summary" | "stats" | "lineups" | "players" | "preview";
+type Tab = "summary" | "stats" | "lineups" | "players" | "videos" | "preview";
 
 export default function MatchPage({ params }: { params: Promise<{ league: string; id: string }> }) {
   const { league, id } = use(params);
@@ -75,6 +75,7 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
     if (m.teamStats?.length) list.push(["stats", fr ? "Stats" : "Estadísticas"]);
     if (m.lineups?.length) list.push(["lineups", fr ? "Compos" : "Alineaciones"]);
     if (m.boxscore?.length) list.push(["players", fr ? "Joueurs" : "Jugadores"]);
+    if (m.videos?.length) list.push(["videos", fr ? `Vidéos (${m.videos.length})` : `Videos (${m.videos.length})`]);
     if (m.h2h?.length || Object.keys(m.form ?? {}).length || m.table?.length) list.push(["preview", fr ? "Avant-match" : "Previa"]);
     return list;
   }, [m, fr]);
@@ -255,6 +256,7 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
       {tab === "stats" && <StatsBars stats={m.teamStats} sport={sport} all season={m.state === "pre"} />}
       {tab === "lineups" && <Lineups m={m} teamOf={teamOf} />}
       {tab === "players" && <Boxscore m={m} teamOf={teamOf} />}
+      {tab === "videos" && <Videos m={m} full />}
       {tab === "preview" && <Preview m={m} />}
 
       <a href={m.sourceUrl} target="_blank" rel="noreferrer" className="block px-1 text-xs text-muted underline">
@@ -290,47 +292,71 @@ function MuteButton({ id }: { id: string }) {
   );
 }
 
-// Resúmenes en video: solo clips oficiales que la fuente (ESPN) publica para este partido
-// (goles y jugadas destacadas). Se reproducen dentro de la app; si no hay, la sección no aparece.
-function Videos({ m }: { m: any }) {
+// Resúmenes en video: todos los clips oficiales que la fuente (ESPN) publica para este partido.
+// Lista compacta (solo títulos); al tocar uno se abre el reproductor con sonido.
+function Videos({ m, full }: { m: any; full?: boolean }) {
   const { lang } = useApp();
   const fr = lang === "fr";
   const vids: any[] = m.videos ?? [];
   const [playing, setPlaying] = useState<number | null>(null);
   if (!vids.length) return null;
   const mmss = (s?: number) => (s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "");
-  const isFile = (u: string) => /\.(mp4|m3u8)(\?|$)/i.test(u);
+  // En el resumen se muestran los 3 primeros; el resto, en la pestaña Videos.
+  const list = full ? vids : vids.slice(0, 3);
   return (
     <section className="rounded-3xl bg-card p-4">
-      <h3 className="mb-3 font-bold">🎬 {fr ? "Buts et temps forts en vidéo" : "Goles y jugadas en video"}</h3>
-      <ul className="space-y-2">
-        {vids.map((v, i) => (
-          <li key={i} className="overflow-hidden rounded-2xl bg-card2">
-            {playing === i && isFile(v.url) ? (
-              <video src={v.url} poster={v.thumb} controls autoPlay playsInline className="aspect-video w-full bg-black" />
-            ) : (
-              <button
-                onClick={() => (isFile(v.url) ? setPlaying(i) : window.open(v.page ?? v.url, "_blank", "noopener"))}
-                className="flex w-full items-center gap-3 p-2 text-left"
-              >
-                <span className="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-black/30">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {v.thumb && <img src={v.thumb} alt="" className="h-full w-full object-cover" />}
-                  <span className="absolute inset-0 flex items-center justify-center text-2xl drop-shadow">▶️</span>
-                </span>
-                <span className="min-w-0 flex-1 text-sm leading-tight font-semibold">
-                  {v.title}
-                  {v.duration ? <span className="mt-0.5 block text-xs font-normal text-muted">{mmss(v.duration)}</span> : null}
-                </span>
-              </button>
-            )}
+      <h3 className="mb-2 font-bold">
+        🎬 {fr ? "Buts et temps forts" : "Goles y jugadas"} <span className="text-sm font-normal text-muted">({vids.length})</span>
+      </h3>
+      <ul className="divide-y divide-line">
+        {list.map((v, i) => (
+          <li key={v.id || i} className="py-1">
+            <button onClick={() => setPlaying(playing === i ? null : i)} className="flex w-full items-center gap-2 py-2 text-left">
+              <span className="text-brand">{playing === i ? "▼" : "▶"}</span>
+              <span className="min-w-0 flex-1 text-sm leading-tight font-semibold">{v.title}</span>
+              {v.duration ? <span className="text-xs text-muted">{mmss(v.duration)}</span> : null}
+            </button>
+            {playing === i && <Player v={v} />}
           </li>
         ))}
       </ul>
+      {!full && vids.length > 3 && (
+        <p className="mt-1 text-xs text-muted">{fr ? `+ ${vids.length - 3} vidéos dans l'onglet Vidéos` : `+ ${vids.length - 3} videos en la pestaña Videos`}</p>
+      )}
       <p className="mt-2 text-[11px] leading-snug text-muted">
         {fr ? "Clips officiels ESPN. Certains peuvent être indisponibles selon le pays." : "Clips oficiales de ESPN. Algunos pueden no estar disponibles según el país."}
       </p>
     </section>
+  );
+}
+
+// Reproductor: primero HLS (trae audio), luego MP4. Se fuerza el sonido al abrirlo (el toque lo permite).
+function Player({ v }: { v: any }) {
+  const { lang } = useApp();
+  const ref = useRef<HTMLVideoElement>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.muted = false;
+    el.volume = 1;
+    el.play().catch(() => undefined);
+  }, []);
+  if (failed || (!v.hls && !v.mp4?.length))
+    return v.page ? (
+      <a href={v.page} target="_blank" rel="noreferrer" className="mb-2 block rounded-xl bg-card2 py-2.5 text-center text-sm font-bold">
+        {lang === "fr" ? "Ouvrir la vidéo sur ESPN" : "Abrir el video en ESPN"}
+      </a>
+    ) : (
+      <p className="mb-2 text-xs text-muted">{lang === "fr" ? "Vidéo indisponible ici." : "Video no disponible aquí."}</p>
+    );
+  return (
+    <video ref={ref} poster={v.thumb} controls playsInline preload="metadata" className="mb-2 aspect-video w-full rounded-xl bg-black" onError={() => setFailed(true)}>
+      {v.hls && <source src={v.hls} type="application/x-mpegURL" />}
+      {(v.mp4 ?? []).map((u: string) => (
+        <source key={u} src={u} type="video/mp4" />
+      ))}
+    </video>
   );
 }
 

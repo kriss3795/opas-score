@@ -326,16 +326,30 @@ export async function matchDetail(league: string, id: string) {
     attendance: gi.attendance,
     officials,
     // Videos reales del partido publicados por la fuente (goles, resumen). Puede venir vacío.
-    videos: (d.videos ?? [])
-      .map((v: any) => ({
-        title: String(v.headline ?? v.title ?? ""),
-        thumb: v.thumbnail ?? v.images?.[0]?.url,
-        duration: Number(v.duration) || undefined,
-        url: v.links?.source?.HD?.href ?? v.links?.source?.href ?? v.links?.mobile?.source?.href ?? v.links?.web?.href,
-        page: v.links?.web?.href,
-      }))
-      .filter((v: any) => v.title && v.url)
-      .slice(0, 8),
+    // Todos los clips oficiales del partido que publica la fuente (goles, jugadas, resumen).
+    // Se guardan varias versiones: HLS (con audio garantizado) y MP4 como respaldo.
+    videos: (() => {
+      const seen = new Set<string>();
+      return [...(d.videos ?? []), ...(d.highlights ?? [])]
+        .map((v: any) => {
+          const L = v.links ?? {};
+          const hls = L.source?.HLS?.HD?.href ?? L.source?.HLS?.href ?? L.mobile?.source?.HLS?.href;
+          const mp4 = [L.source?.full?.href, L.source?.HD?.href, L.source?.href, L.mobile?.source?.href, L.mobile?.href].filter(
+            (u: any) => typeof u === "string" && /\.mp4(\?|$)/i.test(u),
+          );
+          return {
+            id: String(v.id ?? v.headline ?? ""),
+            title: String(v.headline ?? v.title ?? ""),
+            thumb: v.thumbnail ?? v.images?.[0]?.url,
+            duration: Number(v.duration) || undefined,
+            hls,
+            mp4: Array.from(new Set(mp4)),
+            page: L.web?.href,
+          };
+        })
+        .filter((v: any) => v.title && (v.hls || v.mp4.length || v.page))
+        .filter((v: any) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+    })(),
     sourceUrl: `https://www.espn.com/${meta.path.split("/")[0]}/match/_/gameId/${id}`,
     raw: d,
   };
