@@ -8,6 +8,7 @@ import { sessionLabel } from "@/components/EventCard";
 import { IconTv } from "@/components/Icons";
 import { FactsCard } from "@/components/Facts";
 import { gpName } from "@/lib/f1names";
+import YouTubeButton from "@/components/YouTubeButton";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -255,6 +256,7 @@ export default function GPPage() {
               </li>
             ))}
           </ol>
+          <YouTubeButton q={`F1 ${d.last.name} ${String(d.last.date ?? "").slice(0, 4)} race highlights`} label={lang === "fr" ? "Résumé vidéo de la course" : "Resumen en video de la carrera"} />
           <p className="mt-3 text-xs text-muted">{t("source")} : Jolpica-F1</p>
         </section>
       )}

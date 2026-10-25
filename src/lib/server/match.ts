@@ -325,6 +325,17 @@ export async function matchDetail(league: string, id: string) {
     capacity: gi.venue?.capacity,
     attendance: gi.attendance,
     officials,
+    // Videos reales del partido publicados por la fuente (goles, resumen). Puede venir vacío.
+    videos: (d.videos ?? [])
+      .map((v: any) => ({
+        title: String(v.headline ?? v.title ?? ""),
+        thumb: v.thumbnail ?? v.images?.[0]?.url,
+        duration: Number(v.duration) || undefined,
+        url: v.links?.source?.HD?.href ?? v.links?.source?.href ?? v.links?.mobile?.source?.href ?? v.links?.web?.href,
+        page: v.links?.web?.href,
+      }))
+      .filter((v: any) => v.title && v.url)
+      .slice(0, 8),
     sourceUrl: `https://www.espn.com/${meta.path.split("/")[0]}/match/_/gameId/${id}`,
     raw: d,
   };
