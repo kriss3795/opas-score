@@ -32,15 +32,16 @@ export function sessionLabel(key: string, t: (k: Key) => string) {
 export function StatusBadge({ e }: { e: SportEvent }) {
   const { t, lang } = useApp();
   if (e.status === "in") {
+    // Textos cortos: la columna del estado es angosta y "Entretiempo" tapaba el marcador.
     const special: Record<string, string> = {
-      HT: t("halftime"),
-      PEN: lang === "fr" ? "Tirs au but" : "Penales",
+      HT: lang === "fr" ? "Mi-tps" : "Desc.",
+      PEN: lang === "fr" ? "T.a.b." : "Penales",
       BRK: lang === "fr" ? "Pause" : "Pausa",
-      SUSP: lang === "fr" ? "Interrompu" : "Suspendido",
+      SUSP: lang === "fr" ? "Interr." : "Susp.",
     };
     const detail = special[e.statusDetail ?? ""] ?? (e.sport === "f1" || !e.statusDetail ? t("live") : e.statusDetail);
     return (
-      <span className="flex items-center gap-1.5 text-right text-sm leading-tight font-bold text-live">
+      <span className="flex items-center justify-end gap-1.5 text-right text-sm leading-tight font-bold whitespace-nowrap text-live">
         <span className="live-dot h-2 w-2 rounded-full bg-live" />
         {detail}
       </span>
