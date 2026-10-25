@@ -34,14 +34,15 @@ export function StatusBadge({ e }: { e: SportEvent }) {
   if (e.status === "in") {
     // Textos cortos: la columna del estado es angosta y "Entretiempo" tapaba el marcador.
     const special: Record<string, string> = {
-      HT: lang === "fr" ? "Mi-tps" : "Desc.",
+      HT: lang === "fr" ? "Mi-tps" : "Medio t.",
       PEN: lang === "fr" ? "T.a.b." : "Penales",
       BRK: lang === "fr" ? "Pause" : "Pausa",
       SUSP: lang === "fr" ? "Interr." : "Susp.",
     };
+    const isSpecial = Boolean(special[e.statusDetail ?? ""]);
     const detail = special[e.statusDetail ?? ""] ?? (e.sport === "f1" || !e.statusDetail ? t("live") : e.statusDetail);
     return (
-      <span className="flex items-center justify-end gap-1.5 text-right text-sm leading-tight font-bold whitespace-nowrap text-live">
+      <span className={`flex items-center justify-end gap-1.5 text-right leading-tight font-bold whitespace-nowrap text-live ${isSpecial ? "text-xs" : "text-sm"}`}>
         <span className="live-dot h-2 w-2 rounded-full bg-live" />
         {detail}
       </span>
