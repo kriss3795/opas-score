@@ -65,12 +65,18 @@ export default function Home() {
     const live = events.filter((e) => e.status === "in");
     const now = Date.now();
     const upcoming = events.filter((e) => e.status === "pre" || (e.status === "cancelled" && new Date(e.start).getTime() > now));
+    // Hoy se muestra completo en orden de hora: lo terminado (con su resultado), lo aplazado y lo que viene.
+    // (Antes los partidos terminados hoy se iban al final de la pantalla y parecía que no tenían resultado.)
+    const todayKey = dayKey(new Date().toISOString());
+    const isTodayEv = (e: SportEvent) => dayKey(e.start) === todayKey;
+    const todayDone = events.filter((e) => isTodayEv(e) && (e.status === "post" || e.status === "cancelled"));
     const recent = events
-      .filter((e) => e.status === "post")
+      .filter((e) => e.status === "post" && !isTodayEv(e))
       .sort((a, b) => b.start.localeCompare(a.start))
       .slice(0, 20);
     const byDay: { key: string; label: string; items: SportEvent[] }[] = [];
-    for (const e of upcoming) {
+    const seenToday = new Set<string>();
+    for (const e of [...todayDone, ...upcoming].filter((x) => (seenToday.has(`${x.sport}:${x.id}`) ? false : (seenToday.add(`${x.sport}:${x.id}`), true))).sort((a, b) => a.start.localeCompare(b.start))) {
       const k = dayKey(e.start);
       let g = byDay.find((x) => x.key === k);
       if (!g) {
@@ -81,7 +87,7 @@ export default function Home() {
     }
     // Favoritos primero dentro de cada día, respetando la hora.
     const isFollowed = (e: SportEvent) => prefs.important.includes(`${e.sport}:${e.id}`) || prefs.important.includes(e.id);
-    const followed = events.filter((e) => isFollowed(e) && e.status !== "post");
+    const followed = events.filter((e) => isFollowed(e) && e.status !== "post" && e.status !== "cancelled");
     const fset = new Set(followed.map((e) => `${e.sport}:${e.id}`));
     // Próximo partido de un favorito (o seguido), para la cuenta regresiva.
     const isFav = (e: SportEvent) =>
@@ -157,12 +163,12 @@ export default function Home() {
             </Section>
           ))}
 
-          {groups.followed.length === 0 && groups.live.length === 0 && groups.byDay.length === 0 && (
+          {groups.followed.length === 0 && groups.live.length === 0 && groups.byDay.length === 0 && groups.recent.length === 0 && (
             <p className="rounded-2xl bg-card px-5 py-8 text-center text-muted">{t("nothing")}</p>
           )}
 
           {groups.recent.length > 0 && (
-            <Section title={t("recent")}>
+            <Section title={lang === "fr" ? "Résultats d'hier" : "Resultados de ayer"}>
               {groups.recent.map((e) => (
                 <EventCard key={`${e.sport}-${e.id}`} e={e} favIds={favIds} />
               ))}
