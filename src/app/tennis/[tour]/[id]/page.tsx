@@ -1,7 +1,6 @@
 "use client";
 
 import BackButton from "@/components/BackButton";
-import YouTubeButton from "@/components/YouTubeButton";
 
 import { use, useEffect, useState } from "react";
 import { useApp } from "@/lib/client/store";
@@ -118,9 +117,6 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
               : `${fmtDay(m.start, lang)} · ${fmtTime(m.start, lang)} (${fr ? "horaire indicatif" : "hora estimada"})`}
         </div>
       </section>
-      {m.state !== "pre" && (
-        <YouTubeButton q={`${m.a.name} ${m.b.name} ${m.tournament} highlights`} label={fr ? "Résumé vidéo sur YouTube" : "Resumen en video en YouTube"} />
-      )}
       {(m.pathA.length > 0 || m.pathB.length > 0) && (
         <section className="rounded-3xl bg-card p-4">
           <h3 className="mb-3 font-bold">{fr ? "Parcours dans le tournoi" : "Camino en el torneo"}</h3>

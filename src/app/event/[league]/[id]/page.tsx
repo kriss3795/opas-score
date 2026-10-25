@@ -1,7 +1,6 @@
 "use client";
 
 import BackButton from "@/components/BackButton";
-import YouTubeButton from "@/components/YouTubeButton";
 
 import { use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -156,7 +155,6 @@ export default function EventPage({ params }: { params: Promise<{ league: string
               {lang === "fr" ? "Le classement apparaîtra dès le début de l'événement." : "La clasificación aparecerá cuando empiece el evento."}
             </p>
           )}
-          {ev.state !== "pre" && <YouTubeButton q={`${ev.name} highlights`} label={lang === "fr" ? "Résumé vidéo sur YouTube" : "Resumen en video en YouTube"} />}
           <a href={ev.sourceUrl} target="_blank" rel="noreferrer" className="block px-1 text-xs text-muted underline">
             {t("source")} : ESPN
           </a>

@@ -290,50 +290,45 @@ function MuteButton({ id }: { id: string }) {
   );
 }
 
-// Videos: los que publica la fuente para este partido (reales) y una búsqueda del resumen en YouTube,
-// donde las ligas y canales oficiales suben los goles (Ligue 1+, Premier League, beIN…).
+// Resúmenes en video: solo clips oficiales que la fuente (ESPN) publica para este partido
+// (goles y jugadas destacadas). Se reproducen dentro de la app; si no hay, la sección no aparece.
 function Videos({ m }: { m: any }) {
   const { lang } = useApp();
   const fr = lang === "fr";
   const vids: any[] = m.videos ?? [];
-  const day = m.start ? new Date(m.start).toLocaleDateString(fr ? "fr-FR" : "es-CL", { day: "numeric", month: "long", year: "numeric" }) : "";
-  const q = `${m.home?.name ?? ""} ${m.away?.name ?? ""} ${fr ? "résumé" : "resumen"} ${day}`.trim();
-  const yt = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  const [playing, setPlaying] = useState<number | null>(null);
+  if (!vids.length) return null;
   const mmss = (s?: number) => (s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "");
+  const isFile = (u: string) => /\.(mp4|m3u8)(\?|$)/i.test(u);
   return (
     <section className="rounded-3xl bg-card p-4">
-      <h3 className="mb-3 font-bold">🎬 {fr ? "Vidéos du match" : "Videos del partido"}</h3>
-      {vids.length > 0 && (
-        <ul className="mb-3 space-y-2">
-          {vids.map((v, i) => (
-            <li key={i}>
-              <a href={v.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl bg-card2 p-2">
-                {v.thumb ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={v.thumb} alt="" className="h-14 w-24 shrink-0 rounded-lg object-cover" />
-                ) : (
-                  <span className="flex h-14 w-24 shrink-0 items-center justify-center rounded-lg bg-black/30 text-2xl">▶️</span>
-                )}
+      <h3 className="mb-3 font-bold">🎬 {fr ? "Buts et temps forts en vidéo" : "Goles y jugadas en video"}</h3>
+      <ul className="space-y-2">
+        {vids.map((v, i) => (
+          <li key={i} className="overflow-hidden rounded-2xl bg-card2">
+            {playing === i && isFile(v.url) ? (
+              <video src={v.url} poster={v.thumb} controls autoPlay playsInline className="aspect-video w-full bg-black" />
+            ) : (
+              <button
+                onClick={() => (isFile(v.url) ? setPlaying(i) : window.open(v.page ?? v.url, "_blank", "noopener"))}
+                className="flex w-full items-center gap-3 p-2 text-left"
+              >
+                <span className="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-black/30">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {v.thumb && <img src={v.thumb} alt="" className="h-full w-full object-cover" />}
+                  <span className="absolute inset-0 flex items-center justify-center text-2xl drop-shadow">▶️</span>
+                </span>
                 <span className="min-w-0 flex-1 text-sm leading-tight font-semibold">
                   {v.title}
                   {v.duration ? <span className="mt-0.5 block text-xs font-normal text-muted">{mmss(v.duration)}</span> : null}
                 </span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-      <a href={yt} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-xl bg-[#FF0000] py-2.5 text-sm font-bold text-white">
-        ▶ {fr ? "Chercher le résumé sur YouTube" : "Buscar el resumen en YouTube"}
-      </a>
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
       <p className="mt-2 text-[11px] leading-snug text-muted">
-        {vids.length
-          ? fr
-            ? "Vidéos : ESPN (certaines peuvent être bloquées selon le pays). Les chaînes officielles publient les buts sur YouTube."
-            : "Videos: ESPN (algunos pueden estar bloqueados según el país). Los canales oficiales suben los goles a YouTube."
-          : fr
-            ? "Les chaînes officielles publient les buts sur YouTube peu après le match."
-            : "Los canales oficiales suben los goles a YouTube poco después del partido."}
+        {fr ? "Clips officiels ESPN. Certains peuvent être indisponibles selon le pays." : "Clips oficiales de ESPN. Algunos pueden no estar disponibles según el país."}
       </p>
     </section>
   );
