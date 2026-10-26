@@ -4,6 +4,7 @@ import { f1Facts } from "@/lib/server/facts";
 import { f1Live } from "@/lib/server/espn";
 import { circuitWeather } from "@/lib/server/weather";
 import { sessionStatus } from "@/lib/server/f1events";
+import { officialF1 } from "@/lib/server/officialVideos";
 
 export const maxDuration = 60;
 
@@ -98,8 +99,16 @@ export async function GET(req: Request) {
     };
   }
 
+  // Videos oficiales de F1 del Gran Premio actual (si ya hubo sesiones) y de la última carrera.
+  const [videosCurrent, videosLast] = await Promise.all([
+    current && current.sessions.some((s) => sessionStatus(s) !== "pre") ? officialF1(current.name, current.start).catch(() => []) : Promise.resolve([]),
+    last ? officialF1(last.name, last.date).catch(() => []) : Promise.resolve([]),
+  ]);
+
   return NextResponse.json(
     {
+      videosCurrent,
+      videosLast,
       current: current && {
         ...current,
         sessions: current.sessions.map((s) => ({ ...s, status: sessionStatus(s) })),

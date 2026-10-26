@@ -1,6 +1,7 @@
 "use client";
 
 import BackButton from "@/components/BackButton";
+import { OfficialCard } from "@/components/OfficialVideos";
 
 import { use, useEffect, useState } from "react";
 import { useApp } from "@/lib/client/store";
@@ -117,6 +118,7 @@ export default function TennisMatch({ params }: { params: Promise<{ tour: string
               : `${fmtDay(m.start, lang)} · ${fmtTime(m.start, lang)} (${fr ? "horaire indicatif" : "hora estimada"})`}
         </div>
       </section>
+      <OfficialCard items={m.official ?? []} title={fr ? "Résumé vidéo (chaîne officielle)" : "Resumen en video (canal oficial)"} />
       {(m.pathA.length > 0 || m.pathB.length > 0) && (
         <section className="rounded-3xl bg-card p-4">
           <h3 className="mb-3 font-bold">{fr ? "Parcours dans le tournoi" : "Camino en el torneo"}</h3>

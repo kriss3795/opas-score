@@ -8,6 +8,7 @@ import { sessionLabel } from "@/components/EventCard";
 import { IconTv } from "@/components/Icons";
 import { FactsCard } from "@/components/Facts";
 import { gpName } from "@/lib/f1names";
+import { OfficialCard } from "@/components/OfficialVideos";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -177,6 +178,7 @@ export default function GPPage() {
         </section>
       )}
 
+      <OfficialCard items={d.videosCurrent ?? []} title={lang === "fr" ? "Vidéos du Grand Prix (F1 officiel)" : "Videos del Gran Premio (F1 oficial)"} />
       <FactsCard facts={d.facts} />
 
       {d.titleCalc && d.titleCalc.races > 0 && (
@@ -258,6 +260,7 @@ export default function GPPage() {
           <p className="mt-3 text-xs text-muted">{t("source")} : Jolpica-F1</p>
         </section>
       )}
+      <OfficialCard items={d.videosLast ?? []} title={lang === "fr" ? "Vidéos de la dernière course" : "Videos de la última carrera"} />
     </div>
   );
 }

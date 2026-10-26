@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJson } from "@/lib/server/http";
 import { tennisRankings } from "@/lib/server/espn";
+import { officialFor } from "@/lib/server/officialVideos";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -53,9 +54,14 @@ export async function GET(req: NextRequest) {
           })
           .filter((x: any) => !/^tbd$/i.test(x.opp))
           .sort((x: any, y: any) => String(x.date).localeCompare(String(y.date)));
+      // Resumen del canal oficial del circuito (ATP / WTA), buscado por los apellidos de ambos.
+      const state = c.status?.type?.state ?? "pre";
+      const official =
+        state !== "pre" ? await officialFor({ league: `tennis.${tour}`, start: c.date, home: { name: a.name }, away: { name: b.name }, surnames: true }).catch(() => []) : [];
       return NextResponse.json(
         {
           match: {
+            official,
             tour,
             tournament: ev.name,
             grouping: g.grouping?.displayName,

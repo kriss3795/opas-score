@@ -1,6 +1,7 @@
 "use client";
 
 import BackButton from "@/components/BackButton";
+import { OfficialList } from "@/components/OfficialVideos";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/client/store";
@@ -75,7 +76,8 @@ export default function MatchPage({ params }: { params: Promise<{ league: string
     if (m.teamStats?.length) list.push(["stats", fr ? "Stats" : "Estadísticas"]);
     if (m.lineups?.length) list.push(["lineups", fr ? "Compos" : "Alineaciones"]);
     if (m.boxscore?.length) list.push(["players", fr ? "Joueurs" : "Jugadores"]);
-    if (m.videos?.length) list.push(["videos", fr ? `Vidéos (${m.videos.length})` : `Videos (${m.videos.length})`]);
+    const nv = (m.videos?.length ?? 0) + (m.official?.length ?? 0);
+    if (nv) list.push(["videos", fr ? `Vidéos (${nv})` : `Videos (${nv})`]);
     if (m.h2h?.length || Object.keys(m.form ?? {}).length || m.table?.length) list.push(["preview", fr ? "Avant-match" : "Previa"]);
     return list;
   }, [m, fr]);
@@ -298,15 +300,17 @@ function Videos({ m, full }: { m: any; full?: boolean }) {
   const { lang } = useApp();
   const fr = lang === "fr";
   const vids: any[] = m.videos ?? [];
+  const off: any[] = m.official ?? [];
   const [playing, setPlaying] = useState<number | null>(null);
-  if (!vids.length) return null;
+  if (!vids.length && !off.length) return null;
+  const total = vids.length + off.length;
   const mmss = (s?: number) => (s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "");
   // En el resumen se muestran los 3 primeros; el resto, en la pestaña Videos.
   const list = full ? vids : vids.slice(0, 3);
   return (
     <section className="rounded-3xl bg-card p-4">
       <h3 className="mb-2 font-bold">
-        🎬 {fr ? "Buts et temps forts" : "Goles y jugadas"} <span className="text-sm font-normal text-muted">({vids.length})</span>
+        🎬 {fr ? "Buts et temps forts" : "Goles y jugadas"} <span className="text-sm font-normal text-muted">({total})</span>
       </h3>
       <ul className="divide-y divide-line">
         {list.map((v, i) => (
@@ -320,11 +324,15 @@ function Videos({ m, full }: { m: any; full?: boolean }) {
           </li>
         ))}
       </ul>
-      {!full && vids.length > 3 && (
-        <p className="mt-1 text-xs text-muted">{fr ? `+ ${vids.length - 3} vidéos dans l'onglet Vidéos` : `+ ${vids.length - 3} videos en la pestaña Videos`}</p>
+      {/* Luego los del canal oficial de la liga (resumen y goles). */}
+      <OfficialList items={off} limit={full ? undefined : Math.max(0, 3 - list.length)} />
+      {!full && total > 3 && (
+        <p className="mt-1 text-xs text-muted">{fr ? `+ ${total - 3} vidéos dans l'onglet Vidéos` : `+ ${total - 3} videos en la pestaña Videos`}</p>
       )}
       <p className="mt-2 text-[11px] leading-snug text-muted">
-        {fr ? "Clips officiels ESPN. Certains peuvent être indisponibles selon le pays." : "Clips oficiales de ESPN. Algunos pueden no estar disponibles según el país."}
+        {fr
+          ? "Seulement des sources officielles (ESPN et chaînes des ligues). Certaines vidéos peuvent être indisponibles selon le pays."
+          : "Solo fuentes oficiales (ESPN y canales de las ligas). Algunos videos pueden no estar disponibles según el país."}
       </p>
     </section>
   );
